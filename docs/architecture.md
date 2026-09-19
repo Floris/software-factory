@@ -40,6 +40,41 @@ Human
 | Factory behavior and policy | This repository |
 | Workspace routing | Workspace-root `AGENTS.md` and `agents-md` |
 
+## VPS filesystem layout
+
+```text
+/srv/software-factory/
+├── repos/
+│   ├── software-factory/   control repository, clean `main`
+│   ├── expense-tracker/    canonical product checkout, clean `main`
+│   └── website-k8s/        canonical GitOps checkout, clean `main`
+├── worktrees/
+│   ├── software-factory/<bead-id>/
+│   ├── expense-tracker/<bead-id>/
+│   └── website-k8s/<bead-id>/
+└── runtime/
+    ├── locks/
+    └── runs/<run-id>/
+
+/etc/software-factory/
+├── repositories.yaml
+└── policies.yaml
+```
+
+Directory rules:
+
+- `repos/<repository>` is the registered canonical checkout used for fetch,
+  synchronization, Beads discovery, and worktree administration. Its default
+  branch stays clean.
+- `worktrees/<repository>/<bead-id>` is the only writable source workspace for
+  an implementation task. One worktree belongs to one Bead and one branch.
+- `runtime` contains resumable execution metadata and locks, never durable work
+  or secrets, and is not a Git repository.
+- `/etc/software-factory` contains root-provisioned, host-local configuration.
+  It is readable by the factory user but is never committed.
+- Codex receives one worktree as its working directory and writable root. It
+  does not receive `/srv/software-factory/repos` as a general write target.
+
 ## Execution state machine
 
 ```text

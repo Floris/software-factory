@@ -1,8 +1,22 @@
 version: 1
 
+factory_root: /srv/software-factory
+repository_root: /srv/software-factory/repos
 workspace_root: /srv/software-factory/worktrees
+runtime_root: /srv/software-factory/runtime
+
+# Copy this file to /etc/software-factory/repositories.yaml on the VPS.
+# Canonical checkouts stay clean; task changes happen only in Git worktrees.
 
 repositories:
+  - id: software-factory
+    path: /srv/software-factory/repos/software-factory
+    remote: git@github.com:Floris/software-factory.git
+    default_branch: main
+    policy: factory-control
+    beads:
+      source: local
+
   - id: expense-tracker
     path: /srv/software-factory/repos/expense-tracker
     remote: git@github.com:Floris/expense-tracker.git

@@ -39,6 +39,26 @@ Beads ready work
     -> Beads task closes
 ```
 
+## VPS directory layout
+
+All Git projects use one predictable root:
+
+```text
+/srv/software-factory/
+├── repos/                  clean canonical checkouts
+│   ├── software-factory/
+│   ├── expense-tracker/
+│   └── website-k8s/
+├── worktrees/              task-specific writable Git worktrees
+│   └── <repository>/<bead-id>/
+└── runtime/                locks and resumable run metadata; never Git
+```
+
+The factory reads and synchronizes repositories from `repos/`. Codex workers
+write only inside their assigned directory under `worktrees/`; they do not
+implement changes directly in the canonical checkout. Host configuration lives
+under `/etc/software-factory/`, outside every Git repository.
+
 ## Documentation
 
 - [Architecture](docs/architecture.md)
