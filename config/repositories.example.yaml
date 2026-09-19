@@ -11,19 +11,21 @@ runtime_root: /srv/software-factory/runtime
 repositories:
   - id: software-factory
     path: /srv/software-factory/repos/software-factory
-    remote: git@github.com:Floris/software-factory.git
+    remote: git@github.com:example-org/software-factory.git
     default_branch: main
     policy: factory-control
     beads:
       source: local
+      remote: git+ssh://git@github.com/example-org/software-factory.git
 
   - id: expense-tracker
     path: /srv/software-factory/repos/expense-tracker
-    remote: git@github.com:Floris/expense-tracker.git
-    default_branch: main
+    remote: git@github.com:example-org/expense-tracker.git
+    default_branch: master
     policy: product-dev
     beads:
       source: local
+      remote: git+ssh://git@github.com/example-org/expense-tracker.git
     validation:
       commands:
         - [npm, run, lint]
@@ -37,8 +39,9 @@ repositories:
 
   - id: website-k8s
     path: /srv/software-factory/repos/website-k8s
-    remote: git@github.com:Floris/website-k8s.git
+    remote: git@github.com:example-org/website-k8s.git
     default_branch: main
     policy: infrastructure-dev
     beads:
       source: local
+      remote: git+ssh://git@github.com/example-org/website-k8s.git

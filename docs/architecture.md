@@ -47,7 +47,7 @@ Human
 /srv/software-factory/
 ├── repos/
 │   ├── software-factory/   control repository, clean `main`
-│   ├── expense-tracker/    canonical product checkout, clean `main`
+│   ├── expense-tracker/    canonical product checkout, clean `master`
 │   └── website-k8s/        canonical GitOps checkout, clean `main`
 ├── worktrees/
 │   ├── software-factory/<bead-id>/
@@ -66,7 +66,9 @@ Directory rules:
 
 - `repos/<repository>` is the registered canonical checkout used for fetch,
   synchronization, Beads discovery, and worktree administration. Its default
-  branch stays clean.
+  branch stays clean. Only deterministic Oracle operations may write its Git
+  metadata or `.beads`; implementation and review workers receive no canonical
+  checkout write access.
 - `worktrees/<repository>/<bead-id>` is the only writable source workspace for
   an implementation task. One worktree belongs to one Bead and one branch.
 - `runtime` contains resumable execution metadata and locks, never durable work
