@@ -1,0 +1,14 @@
+# Shared Codex policy for the trusted software-factory repository.
+# Authentication, project trust records, and TUI state remain user-local.
+
+approval_policy = "on-request"
+sandbox_mode = "workspace-write"
+allow_login_shell = false
+web_search = "cached"
+
+[sandbox_workspace_write]
+network_access = false
+writable_roots = [
+  "/srv/software-factory/worktrees",
+  "/srv/software-factory/runtime",
+]

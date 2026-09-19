@@ -11,7 +11,12 @@
 
 ### Git actor
 
-- Uses a repository-scoped SSH key or fine-grained token.
+- Uses a dedicated VPS SSH key. During the manual bootstrap phase,
+  `software-factory@s1` is registered as an account-level GitHub key and
+  therefore inherits the repositories available to that account.
+- Treat the account-level key as a documented bootstrap exception. Replace it
+  with a GitHub App, fine-grained token, or repository-scoped deploy keys
+  before enabling unattended multi-repository execution.
 - May push factory branches and, where configured, open pull requests.
 - Does not hold Kubernetes credentials.
 
@@ -26,6 +31,13 @@
 
 - Use `codex exec --sandbox workspace-write` for implementation runs.
 - Do not use a full-access or sandbox-bypass mode.
+- The tracked `.codex/config.toml` is the interactive Oracle bootstrap policy.
+  It grants additional write access only to `/srv/software-factory/worktrees`
+  and `/srv/software-factory/runtime`; it does not grant access to sibling
+  canonical repositories, `/etc`, `/root`, or Kubernetes state.
+- Before the automated runner invokes an implementation worker, override the
+  bootstrap roots with only that task's worktree and runtime directory. A
+  worker must not inherit write access to every task worktree.
 - Keep network access disabled during model-controlled execution unless a later
   threat review explicitly approves a narrower design.
 - Do not expose Codex authentication material to project build scripts, tests,

@@ -59,6 +59,22 @@ write only inside their assigned directory under `worktrees/`; they do not
 implement changes directly in the canonical checkout. Host configuration lives
 under `/etc/software-factory/`, outside every Git repository.
 
+## Codex configuration
+
+The tracked [`.codex/config.toml`](.codex/config.toml) applies the factory's
+shared sandbox and approval policy whenever this trusted repository is opened
+with Codex. It also makes the factory `worktrees/` and `runtime/` directories
+writable, so the CLI does not need repeated `--add-dir` flags.
+
+Machine-local Codex state remains in `/home/codex/.codex/` on the VPS. Project
+trust records, TUI state, authentication files, and tokens must never be copied
+into this repository. After authentication, start an interactive session with:
+
+```sh
+cd /srv/software-factory/repos/software-factory
+codex
+```
+
 ## Documentation
 
 - [Architecture](docs/architecture.md)
