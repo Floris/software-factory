@@ -43,6 +43,29 @@ delegation, integration, and final verification.
 5. Keep a task open until its requested delivery level is verified.
 6. Only the Oracle blocks, updates, or closes tasks.
 
+## Agent roles
+
+The root Codex session in this repository is the Oracle. The reusable subagent
+definitions live in `.codex/agents/` so they are available from the single
+factory entrypoint for every configured project.
+
+- `project_architect` performs bounded, read-only analysis and produces an
+  implementation brief.
+- `app_worker` implements exactly one Bead in its assigned project worktree.
+- `quality_reviewer` performs a read-only review against the Bead and the
+  target repository's instructions.
+
+Every delegated agent must read the target repository's `AGENTS.md`. Product
+invariants stay in the product repository instead of being copied into these
+generic factory roles.
+
+## Operator entrypoint
+
+Humans start Codex from `/srv/software-factory/repos/software-factory`. The
+Oracle selects the configured product and Bead, creates or chooses the task
+worktree, and delegates there. Humans do not normally start a separate root
+Codex session from a canonical product checkout.
+
 Factory-development tasks live in this repository. Product tasks live with
 their product. Deployment tasks live in `website-k8s`. Cross-repository work
 links the relevant Bead IDs instead of copying the task.
