@@ -1,0 +1,19 @@
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Runtime state belongs on the VPS and must not be committed.
+.runtime/
+worktrees/
+logs/
+*.log
+
+# Local configuration may contain host paths or identifiers.
+config/repositories.yaml
+config/policies.yaml
+
+# Secrets are never repository content.
+.env
+.env.*
+secrets/

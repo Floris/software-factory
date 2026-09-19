@@ -1,0 +1,33 @@
+version: 1
+
+policies:
+  product-dev:
+    writers: 1
+    max_attempts: 2
+    codex:
+      sandbox: workspace-write
+      network_access: false
+      structured_output: schemas/codex-result.schema.json
+    git:
+      push_branch: true
+      open_pull_request: true
+      merge_pull_request: false
+    kubernetes:
+      observe: true
+      mutate: false
+      read_secrets: false
+  infrastructure-dev:
+    writers: 1
+    max_attempts: 1
+    codex:
+      sandbox: workspace-write
+      network_access: false
+      structured_output: schemas/codex-result.schema.json
+    git:
+      push_branch: true
+      open_pull_request: true
+      merge_pull_request: false
+    kubernetes:
+      observe: true
+      mutate: false
+      read_secrets: false

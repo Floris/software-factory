@@ -1,0 +1,30 @@
+version: 1
+
+workspace_root: /srv/software-factory/worktrees
+
+repositories:
+  - id: expense-tracker
+    path: /srv/software-factory/repos/expense-tracker
+    remote: git@github.com:Floris/expense-tracker.git
+    default_branch: main
+    policy: product-dev
+    beads:
+      source: local
+    validation:
+      commands:
+        - [npm, run, lint]
+        - [npm, run, typecheck]
+        - [npm, test]
+        - [npm, run, build]
+    deployment:
+      repository: website-k8s
+      application: expense-tracker-dev
+      environment: dev
+
+  - id: website-k8s
+    path: /srv/software-factory/repos/website-k8s
+    remote: git@github.com:Floris/website-k8s.git
+    default_branch: main
+    policy: infrastructure-dev
+    beads:
+      source: local
