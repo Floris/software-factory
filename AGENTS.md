@@ -41,7 +41,11 @@ delegation, integration, and final verification.
    deployment policy before execution.
 4. Give workers read-only access to Beads; workers must not edit `.beads`.
 5. Keep a task open until its requested delivery level is verified.
-6. Only the Oracle blocks, updates, or closes tasks.
+6. Before closing a merged task, the Oracle acquires the exclusive lifecycle
+   cleanup lock and safely removes its exact task branch and dedicated
+   worktree using durable per-step state and an atomic remote-ref lease as
+   specified in `docs/workflow.md`.
+7. Only the Oracle blocks, updates, cleans up, or closes tasks.
 
 ## Agent roles
 

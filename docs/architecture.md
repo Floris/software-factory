@@ -24,6 +24,7 @@ Human
        -> ArgoCD
        -> K3s DEV
   -> read-only deployment verification
+  -> safe task branch and worktree cleanup
   -> Beads completion
 ```
 
@@ -90,12 +91,46 @@ ready
   -> deployment_requested
   -> deploying
   -> verifying
+  -> cleaning_up
   -> completed
 ```
 
 Every transition must be idempotent. After interruption, the runner discovers
 the current Beads, Git, pull-request, CI, image, and ArgoCD state before it
 performs another mutation.
+
+`cleaning_up` is an Oracle-owned completion gate. Before resolving targets, the
+Oracle acquires an exclusive repository/task lifecycle cleanup lock from
+trusted factory state. No run may start in the task worktree while this lock is
+held. The Oracle refreshes the remote default branch and requires
+`git merge-base --is-ancestor <exact-task-head> <refreshed-remote-default>` to
+succeed. It also proves that the dedicated worktree is clean and inactive.
+
+Before mutation, the Oracle writes a trusted, resumable record containing the
+repository, exact branch, task-head SHA, worktree path, default-ref SHA, check
+results, and per-step status. With the lock still held, it checks activity
+again immediately before removing the exact worktree, then deletes the local
+task branch and deletes the exact remote task branch last. Each mutation moves
+durably through `pending -> executing -> completed`, with `executing` recorded
+before invocation and `completed` only after success.
+
+Immediately before remote deletion, the Oracle refreshes exactly the remote
+default and task refs, verifies that the task ref still equals the recorded
+task-head SHA, reruns the default/protected exclusions, and reruns exact
+merge-base ancestry against the refreshed remote default. Deletion then uses
+an atomic ref lease bound to the recorded SHA, so a concurrent ref update fails
+closed. The Oracle records final evidence and Bead closure before releasing the
+lock.
+
+On partial failure, the Oracle holds the lock while safely recording current
+state, leaves the Bead open, and permits a later lock holder to revalidate and
+resume idempotently from the recorded step. On recovery, an absent exact
+resource in `executing` may be marked complete only when its trusted identity
+record and every remaining applicable identity, ref, ancestry, and protection
+check still pass; absence in `pending` or any ambiguity blocks. Failure or
+ambiguity preserves remaining resources. Default or protected branches,
+unmerged or active task branches, dirty or active worktrees, and resources
+without an unambiguous task mapping are never cleanup targets.
 
 ## Concurrency
 
