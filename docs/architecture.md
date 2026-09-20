@@ -89,6 +89,14 @@ entry may additionally declare named components, the OCI package repositories
 each component publishes, and the registered GitOps applications that consume
 those components.
 
+Policy separates model-controlled Git capability from deterministic lifecycle
+authority. `git.delete_branch: false` prevents delegated/model-controlled
+branch deletion. `lifecycle.delete_merged_remote_branch: true` authorizes only
+the trusted Oracle runner's locked, durable deletion of the exact remote task
+ref after a verified true merge. It is neither general branch-delete authority
+nor permission to evaluate a model-produced command. A missing or false
+lifecycle key blocks that remote mutation.
+
 Each entry also carries non-secret `credential_refs` keyed by operation. The
 trusted credential provider resolves the reference; credential material never
 appears in repository configuration. Git read/write and Beads synchronization
@@ -177,6 +185,14 @@ inactive, and it requires
 succeed. A squash or rebase result therefore fails closed; the factory does
 not manufacture ancestry or weaken this proof.
 
+That same repository/task lifecycle lock is the task-worktree activation gate.
+Before activating the worktree or starting any worker, reviewer, or other
+factory run against it, the Oracle must acquire shared participation in that
+exact lock and retain it until the run is inactive. An exclusive lifecycle lock
+prevents a new activation from starting, and an active shared participant
+prevents cleanup from acquiring exclusivity. A separate activity flag or a
+one-time lock observation is not a substitute for participating in the lock.
+
 Before remote mutation, the Oracle writes a trusted, resumable lifecycle record
 containing the repository, merged pull-request identity, exact branch and
 task-head SHA, worktree path, refreshed default-ref SHA, protection and
@@ -187,7 +203,8 @@ with a force-with-lease bound to the recorded task-head SHA succeeds and remote
 absence is observed. A concurrent ref update makes the lease fail closed. The
 Oracle then releases the lock but deliberately retains the dedicated worktree
 and local branch so later delivery and verification can use their exact
-evidence.
+evidence. The exclusive lock remains held through deletion-result observation
+and durable persistence of the `completed` evidence.
 
 After the requested delivery level is verified, `cleaning_up` is the separate
 closure gate. The Oracle reacquires the same exclusive lifecycle lock, loads
@@ -200,6 +217,8 @@ Absence while `pending` blocks. The Oracle rechecks that the retained worktree
 is clean and inactive, then removes only the recorded exact worktree and local
 task branch, each with its own durable `pending -> executing -> completed`
 state, and closes the Bead only after both steps complete.
+The exclusive lock remains held through observation of each local mutation,
+durable evidence persistence, and Bead closure.
 
 On partial failure, the Oracle records current state while holding the lock,
 leaves the Bead open, and permits a later lock holder to revalidate and resume

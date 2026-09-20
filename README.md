@@ -116,6 +116,13 @@ also enforce that delegated agents cannot create or delete branches or
 worktrees, mutate pull requests, or run lifecycle cleanup; those operations
 belong to the Oracle.
 
+The example policies intentionally combine `git.delete_branch: false` with
+`lifecycle.delete_merged_remote_branch: true`. The first keeps deletion out of
+delegated and model-controlled Git actions. The second grants only the trusted
+Oracle runner permission to perform the locked, durable, exact merged remote
+task-ref deletion defined by the lifecycle workflow; it never authorizes a
+model-produced command.
+
 Machine-local Codex state remains in `/home/codex/.codex/` on the VPS. Project
 trust records, TUI state, authentication files, and tokens must never be copied
 into this repository. After authentication, start an interactive session with:

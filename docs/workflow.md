@@ -108,6 +108,13 @@ cleanup. Architects and reviewers make no external mutations. Delegated roles
 run only trusted validation commands supplied by the Oracle or recorded in
 host configuration.
 
+Every activation of a task worktree, including the start of a worker, reviewer,
+or other factory run, must acquire shared participation in the same exact
+repository/task lifecycle lock used by cleanup and retain it until that run is
+inactive. A run cannot start while the Oracle holds the exclusive lock, and the
+Oracle cannot acquire exclusivity while a run holds shared participation. An
+activity marker or one-time check of the lock is not sufficient on its own.
+
 ## Deployment
 
 1. CI validates the merged application commit.
@@ -128,11 +135,17 @@ host configuration.
 
 The Oracle owns every lifecycle mutation. Immediately after a successful merge
 is observed, and before waiting for image, deployment, or promotion delivery,
-it:
+it first requires `lifecycle.delete_merged_remote_branch: true` from the
+selected root-owned policy. `git.delete_branch: false` remains the prohibition
+for delegated and model-controlled Git operations; the lifecycle key authorizes
+only this deterministic Oracle procedure and never a model-produced command.
+If that lifecycle key is missing or false, deletion blocks. When authorized,
+the Oracle:
 
 1. acquires an exclusive repository/task lifecycle cleanup lock identified
    from trusted factory state before resolving any target, and holds it through
-   all checks, mutation, and evidence recording;
+   all checks, mutation, mutation-result observation, and durable evidence
+   persistence;
 2. verifies the merged pull request's exact repository, number, base ref, head
    ref, recorded task-head SHA, and merge result against trusted factory state;
 3. requires a true merge whose refreshed default branch contains the exact
@@ -181,7 +194,9 @@ The Bead remains open, and the dedicated worktree and local task branch remain
 available, until its requested delivery level is verified. The Oracle then:
 
 1. reacquires the exclusive repository/task lifecycle lock and loads the exact
-   durable record created during merge-time deletion;
+   durable record created during merge-time deletion, retaining the lock
+   through mutation-result observation, durable evidence persistence, and Bead
+   closure;
 2. accepts remote absence only when the deletion step is `completed`, or under
    the narrow `executing` recovery rule above after all applicable checks are
    re-proven; absence in `pending` fails closed;

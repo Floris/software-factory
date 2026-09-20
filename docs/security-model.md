@@ -124,13 +124,29 @@
 
 ## Lifecycle mutation boundary
 
-Immediately after a verified true merge, the Oracle alone may delete the exact
-remote task ref. It first takes the exclusive repository/task lifecycle lock,
-matches the merged pull-request identity, refreshes exact task and default
-refs, rejects shared/default/protected/active/dirty/ambiguous state, proves the
-recorded task-head SHA is an ancestor of the refreshed default, and records
-`pending -> executing -> completed` evidence. Deletion uses a force-with-lease
-bound to that SHA; squash, rebase, a moved ref, or any ambiguity fails closed.
+Root-owned policy keeps two authorities distinct. `git.delete_branch: false`
+denies branch deletion to delegated and model-controlled Git operations.
+`lifecycle.delete_merged_remote_branch: true` authorizes only the trusted
+Oracle runner's locked, durable, exact merged remote task-ref operation. It is
+not general delete authority and never authorizes model-produced commands; a
+missing or false lifecycle key blocks the mutation.
+
+Immediately after a verified true merge, the authorized Oracle may delete the
+exact remote task ref. It first takes the exclusive repository/task lifecycle
+lock, matches the merged pull-request identity, refreshes exact task and
+default refs, rejects shared/default/protected/active/dirty/ambiguous state,
+proves the recorded task-head SHA is an ancestor of the refreshed default, and
+records `pending -> executing -> completed` evidence. Deletion uses a
+force-with-lease bound to that SHA; squash, rebase, a moved ref, or any
+ambiguity fails closed. The lock is held through mutation-result observation
+and durable evidence persistence.
+
+Every activation of that task worktree and every worker, reviewer, or other
+factory run started against it must participate in the same lock in shared mode
+for the run's active lifetime. Consequently, no run can start while lifecycle
+cleanup holds the exclusive lock, and exclusivity cannot begin while a run is
+active. An activity marker or one-time lock check cannot replace lock
+participation.
 
 The dedicated worktree and local task branch are retained until delivery is
 verified. Their later removal and Bead closure require the lock again and the
@@ -139,7 +155,9 @@ record is not authority to clean up; only narrow recovery from a previously
 persisted `executing` state may accept absence after all applicable identity,
 merge, ref, ancestry, protection, cleanliness, and activity checks are
 re-proven. Repository auto-delete settings and pull-request text are not
-trusted lifecycle evidence.
+trusted lifecycle evidence. The later exclusive lock is likewise retained
+through local mutation observation, durable evidence persistence, and Bead
+closure.
 
 ## Untrusted input
 

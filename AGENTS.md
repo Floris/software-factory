@@ -51,6 +51,12 @@ delegation, integration, and final verification.
 8. Only the Oracle blocks, updates, mutates pull requests, manages branches or
    worktrees, runs lifecycle operations, or closes tasks.
 
+In policy, `git.delete_branch: false` denies branch deletion to delegated and
+model-controlled Git operations. The separate
+`lifecycle.delete_merged_remote_branch: true` authorizes only the deterministic
+Oracle runner's locked, durable, exact merged remote task-ref deletion; it is
+not authority to execute a model-produced deletion command.
+
 ## Agent roles
 
 The root Codex session in this repository is the Oracle. The reusable subagent
