@@ -5,43 +5,109 @@ repository_root: /srv/software-factory/repos
 workspace_root: /srv/software-factory/worktrees
 runtime_root: /srv/software-factory/runtime
 
-# Copy this file to /etc/software-factory/repositories.yaml on the VPS.
+# Copy this file to /etc/software-factory/repositories.yaml on the VPS and
+# replace every placeholder there. The root-provisioned copy is the live source
+# of truth; this file contains no live repository or deployment state.
 # Canonical checkouts stay clean; task changes happen only in Git worktrees.
+# `credential_refs` values are non-secret lookup keys. The credential provider,
+# not this file, stores and returns credential material for the exact operation.
+# Legacy entries without this field are parseable for supervised migration but
+# fail unattended preflight until every required operation is configured.
 
 repositories:
-  - id: software-factory
-    path: /srv/software-factory/repos/software-factory
-    remote: git@github.com:example-org/software-factory.git
+  - id: factory-control
+    path: /srv/software-factory/repos/factory-control
+    remote: git@github.com:example-org/factory-control.git
     default_branch: main
     policy: factory-control
     beads:
       source: local
-      remote: git+ssh://git@github.com/example-org/software-factory.git
+      remote: git+ssh://git@github.com/example-org/factory-control.git
+    credential_refs:
+      git_read: credential-provider://factory-control/git-read
+      git_write: credential-provider://factory-control/git-write
+      beads_sync: credential-provider://factory-control/beads-sync
 
-  - id: expense-tracker
-    path: /srv/software-factory/repos/expense-tracker
-    remote: git@github.com:example-org/expense-tracker.git
-    default_branch: master
+  # `deployment` is the version 1 shorthand retained for a repository with one
+  # deployable component. New multi-component registrations use `deployments`.
+  - id: example-service
+    path: /srv/software-factory/repos/example-service
+    remote: git@github.com:example-org/example-service.git
+    default_branch: main
     policy: product-dev
     beads:
       source: local
-      remote: git+ssh://git@github.com/example-org/expense-tracker.git
+      remote: git+ssh://git@github.com/example-org/example-service.git
+    credential_refs:
+      git_read: credential-provider://example-service/git-read
+      git_write: credential-provider://example-service/git-write
+      beads_sync: credential-provider://example-service/beads-sync
     validation:
       commands:
-        - [npm, run, lint]
-        - [npm, run, typecheck]
-        - [npm, test]
-        - [npm, run, build]
+        - [make, verify]
     deployment:
-      repository: website-k8s
-      application: expense-tracker-dev
+      repository: deployment-config
+      application: example-service-dev
       environment: dev
 
-  - id: website-k8s
-    path: /srv/software-factory/repos/website-k8s
-    remote: git@github.com:example-org/website-k8s.git
+  # A product repository can publish several packages and map its components to
+  # one or more GitOps applications without copying manifest desired state here.
+  - id: example-suite
+    path: /srv/software-factory/repos/example-suite
+    remote: git@github.com:example-org/example-suite.git
+    default_branch: main
+    policy: product-dev
+    beads:
+      source: local
+      remote: git+ssh://git@github.com/example-org/example-suite.git
+    credential_refs:
+      git_read: credential-provider://example-suite/git-read
+      git_write: credential-provider://example-suite/git-write
+      beads_sync: credential-provider://example-suite/beads-sync
+      package_read: credential-provider://example-suite/package-read
+    validation:
+      commands:
+        - [make, verify]
+    components:
+      - id: api
+        source: services/api
+        packages:
+          - type: oci-image
+            repository: ghcr.io/example-org/example-suite-api
+            tag_policy: full-commit-sha
+            tag_prefix: sha-
+      - id: worker
+        source: services/worker
+        packages:
+          - type: oci-image
+            repository: ghcr.io/example-org/example-suite-worker
+            tag_policy: full-commit-sha
+            tag_prefix: sha-
+          - type: oci-image
+            repository: ghcr.io/example-org/example-suite-maintenance
+            tag_policy: full-commit-sha
+            tag_prefix: sha-
+    deployments:
+      - repository: deployment-config
+        application: example-suite-dev
+        environment: dev
+        components: [api, worker]
+      - repository: deployment-config
+        application: example-suite-preview
+        environment: preview
+        components: [api]
+
+  - id: deployment-config
+    path: /srv/software-factory/repos/deployment-config
+    remote: git@github.com:example-org/deployment-config.git
     default_branch: main
     policy: infrastructure-dev
     beads:
       source: local
-      remote: git+ssh://git@github.com/example-org/website-k8s.git
+      remote: git+ssh://git@github.com/example-org/deployment-config.git
+    credential_refs:
+      git_read: credential-provider://deployment-config/git-read
+      git_write: credential-provider://deployment-config/git-write
+      beads_sync: credential-provider://deployment-config/beads-sync
+      gitops_read: credential-provider://deployment-config/gitops-read
+      gitops_write: credential-provider://deployment-config/gitops-write

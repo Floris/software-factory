@@ -47,11 +47,11 @@ Human
 /srv/software-factory/
 ├── repos/
 │   ├── software-factory/   control repository, clean `main`
-│   ├── expense-tracker/    canonical product checkout, clean `master`
+│   ├── <product-id>/       canonical product checkout, clean default branch
 │   └── website-k8s/        canonical GitOps checkout, clean `main`
 ├── worktrees/
 │   ├── software-factory/<bead-id>/
-│   ├── expense-tracker/<bead-id>/
+│   ├── <product-id>/<bead-id>/
 │   └── website-k8s/<bead-id>/
 └── runtime/
     ├── locks/
@@ -77,6 +77,63 @@ Directory rules:
   It is readable by the factory user but is never committed.
 - Codex receives one worktree as its working directory and writable root. It
   does not receive `/srv/software-factory/repos` as a general write target.
+
+## Repository and component model
+
+The root-provisioned `/etc/software-factory/repositories.yaml` is the runtime
+allowlist. Each entry identifies exactly one canonical Git repository, default
+branch, policy, Beads remote, and trusted validation command arrays. A product
+entry may additionally declare named components, the OCI package repositories
+each component publishes, and the registered GitOps applications that consume
+those components.
+
+Each entry also carries non-secret `credential_refs` keyed by operation. The
+trusted credential provider resolves the reference; credential material never
+appears in repository configuration. Git read/write and Beads synchronization
+resolve against the selected source repository, package read against that
+repository's declared package set, and GitOps read/write against the target
+GitOps repository. A product credential is never a fallback for its deployment
+repository or another product.
+
+Package publication is outside the VPS credential provider. Repository CI uses
+the GitHub Actions `GITHUB_TOKEN` with `packages: write` scoped to the publish
+job and `contents: read` otherwise. The factory validates the workflow boundary,
+successful run, full-SHA artifact identity, and OCI provenance; CI neither
+reads host registration nor receives a registry-push credential from the VPS.
+
+Repository IDs, canonical paths, normalized Git repository identities/remotes,
+and Beads remote identities are each unique across registrations. Every entry
+has exactly one scalar `default_branch`; the branch value is local to that
+repository, so several repositories may all use `main`.
+
+This mapping is routing metadata, not a copy of desired state. It records stable
+identities and the required `sha-<full 40-character commit>` tag policy; it
+never records current image tags, Kubernetes manifests, or rollout status.
+`website-k8s` remains the only source of Kubernetes desired state. Component
+IDs are unique within their product repository, package identities are
+unambiguous, and every component referenced by a deployment must be declared by
+that same product entry.
+
+Version 1 keeps the singular `deployment` form for an existing one-component
+registration and adds the plural `deployments` form for one-to-many mappings.
+The forms are mutually exclusive. Unknown repositories, duplicate component or
+package identities, dangling component references, non-array validation
+commands, and mutable package policies are configuration errors that stop work
+before a claim or external mutation.
+
+Legacy version 1 entries without `credential_refs` remain parseable so an
+operator can migrate the host file without an unsafe flag day. They authorize
+only the documented operator-supervised manual bootstrap path. The unattended
+runner rejects them before repository access, Beads synchronization, package
+access, or GitOps work. It also rejects a reference that is missing, reused
+across repository boundaries, unresolved, or broader than its exact operation.
+
+Repository onboarding is complete only when the canonical checkout is clean,
+its exact remote and default branch match host configuration, repository-level
+`AGENTS.md` is present, its private canonical Beads database is synchronized to
+its own configured remote, and its trusted validation and delivery contracts
+are usable. The operator owns registration in `/etc`; the factory never
+discovers a repository and silently grants itself authority over it.
 
 ## Execution state machine
 

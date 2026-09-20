@@ -7,7 +7,10 @@
 - `website-k8s` tracks deployment and infrastructure work.
 
 Do not maintain a central duplicate of all product tasks. The factory discovers
-configured repositories and queries their canonical Beads databases.
+only repositories explicitly registered by the operator and queries each
+repository's canonical Beads database. A multi-component product still has one
+product Beads database; components and packages are routing metadata, not
+separate task stores.
 
 ## Ownership
 
@@ -52,11 +55,24 @@ Each canonical Beads database uses its own Dolt remote. A runner pulls before
 selecting work and pushes after an Oracle-owned state change. Failure to
 synchronize blocks new claims rather than allowing divergent work state.
 
+Repository IDs, canonical paths, normalized Git repository identities/remotes,
+and Beads remote identities must each be unique across entries in
+root-provisioned host configuration. Each repository declares exactly one
+default branch, but a branch name is not a global identity: multiple
+repositories may validly use `main` or another identical branch name. Reusing
+one Beads remote for multiple product repositories, falling back to a central
+database, or accepting a remote discovered from untrusted repository content
+is forbidden. New repository onboarding proves the same ownership, mode,
+readability, and pull/check/push invariants before that repository contributes
+ready work.
+
 The Oracle resolves the Dolt remote from root-provisioned
 `/etc/software-factory/repositories.yaml`. Do not commit the canonical remote
 to a product repository's tracked `.beads/config.yaml`. The trusted runner
-configures the local database at onboarding, and only the factory Git identity
-receives permission to publish that remote state.
+configures the local database at onboarding, and only the exact repository's
+`beads_sync` credential binding receives permission to publish that remote
+state. A Git source binding or another repository's Beads binding is never a
+fallback.
 
 Bootstrap an empty remote explicitly from trusted repository configuration:
 
@@ -66,8 +82,9 @@ Bootstrap an empty remote explicitly from trusted repository configuration:
 4. run the normal pull, conflict check, blocked-state repair, and push cycle.
 
 Do not begin bootstrap with a pull from an empty remote. Do not force-push a
-Dolt remote during normal operation. Every canonical Beads operation has these
-trusted preflight and postflight checks:
+Dolt remote during normal operation. Do not copy another repository's database
+to bootstrap a new product. Every canonical Beads operation has these trusted
+preflight and postflight checks:
 
 1. resolve the canonical path and expected account from host configuration;
 2. reject symlinks, an owner other than the factory account, a top-level mode

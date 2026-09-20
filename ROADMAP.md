@@ -1,6 +1,6 @@
 # Roadmap
 
-Status reviewed on 2026-09-19 against the VPS, repository state, Beads state,
+Status reviewed on 2026-09-20 against the VPS, repository state, Beads state,
 Git history, and host configuration. Checked items are verified complete.
 Unchecked items remain delivery work; their `Current` note records implemented
 foundations without treating them as an operational capability.
@@ -10,6 +10,8 @@ foundations without treating them as an operational capability.
 - [x] Record architecture and security boundaries.
 - [x] Define Beads ownership and cross-repository linking.
 - [x] Add configuration examples.
+- [x] Define a neutral multi-repository component, package, and deployment
+  routing contract.
 - [ ] Add this repository to the shared workspace router.
   - Current: reusable agent definitions are centralized here, but the
     workspace-root `AGENTS.md` and `agents-md` routing entry are absent.
@@ -22,17 +24,27 @@ foundations without treating them as an operational capability.
   - Current: Git, Codex CLI, Beads, and kubectl are available to the factory;
     Node.js and npm are not available to the `codex` user.
 - [ ] Authenticate each integration with its own least-privilege identity.
-  - Current: repository-specific SSH keys and Git remote access work. The
-    read-only Kubernetes observer identity is not configured.
+  - Current: Git remote access works, but repository-by-repository credential
+    references and operation/audience preflight have not been verified. The
+    read-only Kubernetes observer identity is not configured. Unattended
+    multi-repository execution remains disabled while an account-wide
+    bootstrap credential is usable or any required `credential_refs` entry is
+    absent.
 - [x] Initialize canonical Beads databases and remotes.
   - Evidence: `software-factory`, `expense-tracker`, and `website-k8s` each
     completed a Dolt pull/check/push cycle. Their embedded databases are owned
     by the non-root factory account and their top-level `.beads` directories
     use mode `0700`.
   - Current: the tracked host-configuration example now records the verified
-    Expense Tracker `master` branch and the required Dolt remote fields with
-    neutral placeholders. Refresh the root-provisioned host copy with its
-    actual URLs before unattended execution.
+    contract and required Dolt remote fields with neutral placeholders.
+    Refresh the root-provisioned host copy with reviewed repository-specific
+    values before unattended execution.
+- [ ] Register and preflight every opted-in product repository.
+  - Current: the tracked contract supports one-to-many components, OCI package
+    identities, and GitOps application mappings. Root-owned host registration,
+    exact remote/default-branch verification, per-repository Beads
+    synchronization, operation-keyed credential references, and credential
+    audience checks remain operator work for each repository.
 
 ## Phase 2 - Manual single-task runner
 
@@ -111,4 +123,6 @@ configured validation profile from orchestration rather than an ad hoc shell.
 Implement and fault-test the canonical Beads ownership/mode preflight and
 postflight before unattended execution. Then configure the read-only
 Kubernetes observer and verify ArgoCD and workload health without access to
-Secrets. These are prerequisites for Phase 5 scheduling.
+Secrets. Register each opted-in repository in the root-owned host configuration
+and replace any account-wide bootstrap access with verified repository-scoped
+credentials. These are prerequisites for Phase 5 scheduling.
