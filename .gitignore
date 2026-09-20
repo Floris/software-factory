@@ -17,3 +17,4 @@ config/policies.yaml
 .env
 .env.*
 secrets/
+.beads.gate.lock
