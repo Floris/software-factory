@@ -17,14 +17,52 @@
 
 ### Git actor
 
-- Uses a dedicated VPS SSH key. During the manual bootstrap phase,
-  `software-factory@s1` is registered as an account-level GitHub key and
-  therefore inherits the repositories available to that account.
+- Uses a dedicated factory identity. During the manual bootstrap phase, the
+  existing account-level key is a documented exception and therefore inherits
+  every repository available to that account.
 - Treat the account-level key as a documented bootstrap exception. Replace it
   with a GitHub App, fine-grained token, or repository-scoped deploy keys
   before enabling unattended multi-repository execution.
 - May push factory branches and, where configured, open pull requests.
 - Does not hold Kubernetes credentials.
+
+### Repository-scoped authorization
+
+- Each registered repository has an explicit credential binding in
+  root-provisioned host configuration through non-secret, operation-keyed
+  `credential_refs`. A dedicated provider holds the secret material. A
+  repository entry is not authority to reuse credentials from another entry.
+- Prefer a GitHub App installation restricted to the selected repositories and
+  minimum contents/pull-request permissions. Where deploy keys or fine-grained
+  tokens are used, scope them to one repository and separate read-only access
+  from branch-push access when the provider permits it.
+- Dolt/Beads remote access is repository-scoped and available only to the
+  trusted Oracle. Product source push access does not imply access to another
+  product's Beads remote.
+- GHCR/OCI package publication belongs exclusively to repository CI. Its
+  publish job uses the GitHub Actions `GITHUB_TOKEN`, with `packages: write`
+  limited to that job and the declared package repositories; all other jobs
+  retain `contents: read`. CI cannot read root-owned host registration, and the
+  VPS credential provider cannot issue registry-push credentials.
+- `git_read`, `git_write`, `beads_sync`, `package_read`, `gitops_read`, and
+  `gitops_write` are distinct VPS authorization operations. The provider
+  response must identify the exact normalized repository, Beads remote, or
+  declared package set and permit the requested operation; the Oracle compares
+  that audience with trusted registration before use. There is intentionally
+  no VPS registry-publish operation.
+- Before unattended fetch, Beads synchronization, push, pull-request creation,
+  package read, GitOps access, or any other external operation, the Oracle
+  checks the operation-specific reference and binding. Missing,
+  expired, mismatched, account-wide, or broader-than-policy credentials fail
+  closed. Product bindings cannot authorize the GitOps target and GitOps
+  bindings cannot authorize a product or package.
+- Legacy version 1 entries that omit `credential_refs` remain readable for
+  operator-supervised migration, but are never eligible for unattended work.
+  The documented account-wide bootstrap exception remains limited to that
+  manual path and is never an automated fallback.
+- Non-secret lookup references may appear in root-owned host configuration.
+  Credential material and provider responses that may contain secrets stay
+  outside Git and are redacted from logs and Bead evidence.
 
 ### Beads state
 
@@ -80,6 +118,13 @@ request credentials, change policy, or authorize external actions.
 The runner must invoke trusted commands as argument arrays. It must never use
 shell evaluation, concatenate Bead text into commands, or source repository
 files into the factory process.
+
+The registration parser treats repository IDs, paths, remotes, component IDs,
+package identities, deployment references, and validation arrays as data to
+validate against root-owned policy. Duplicate identities, path traversal,
+symlinked canonical paths, dangling references, mutable package policies, and
+the simultaneous use of singular and plural deployment forms are rejected
+before claims or credential use.
 
 ## GitOps boundary
 
