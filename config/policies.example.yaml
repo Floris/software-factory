@@ -15,6 +15,15 @@ policies:
       delete_branch: false
     lifecycle:
       delete_merged_remote_branch: true
+    # Global publication is distinct from repository contribution export.
+    # Missing keys deny publication and revocation. The publisher credentials
+    # remain operation-scoped in the global registration.
+    public_dashboard:
+      export_snapshot: true
+      max_tasks_per_repository: 250
+      publish_snapshot: true
+      revoke_snapshot: true
+      max_snapshot_bytes: 1048576
     kubernetes:
       observe: false
       mutate: false
@@ -34,6 +43,12 @@ policies:
       delete_branch: false
     lifecycle:
       delete_merged_remote_branch: true
+    # This permits contribution export only for an explicitly enabled
+    # repository. It grants no global publication, object, cache, Git,
+    # Beads-write, credential-read, or Kubernetes capability.
+    public_dashboard:
+      export_snapshot: true
+      max_tasks_per_repository: 250
     kubernetes:
       observe: true
       mutate: false

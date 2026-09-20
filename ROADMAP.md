@@ -115,6 +115,35 @@ foundations without treating them as an operational capability.
 - [ ] Add per-PR namespaces, quotas, temporary ingress, and automatic cleanup.
 - [ ] Do not begin this phase until resource usage fits the 2-vCPU/8-GB VPS.
 
+## Phase 7 - Public work dashboard
+
+- [x] Approve the trust boundary, sanitized field allowlist, stale-data
+  behavior, and opt-in publication contract in ADR 0002.
+- [ ] Implement the deterministic read-only exporter and versioned strict
+  snapshot schema plus the root-owned, content-bound public-copy manifest
+  schema and runtime handling.
+- [ ] Implement the separately scoped atomic publisher, static/object storage,
+  exclusive publication/revocation lock, monotonic authorization revision,
+  preprovisioned empty object, non-reusable generation fencing, cache purge,
+  and replacement-only revocation path.
+- [ ] Fault-test forged task metadata, changed copy/digests, unknown tasks,
+  cross-repository reuse, source outage after revocation, and publication
+  races with revocation. Include timed-out or ambiguous replace/cache
+  responses, remote-generation conflicts, delayed writes, restart recovery,
+  and blocking of later candidates until reconciliation. Prove the `G0` lost
+  acknowledgement/retry, `G1` recovery, `G2` revocation, and rejected delayed
+  `G0` upload sequence.
+- [ ] Create the separate Next.js product repository and implement the
+  read-only, plain-text dashboard without Server Actions or generic proxying.
+- [ ] Add the reviewed dashboard deployment through `website-k8s` and verify
+  it on the VPS.
+
+Current: only documentation and neutral, default-off configuration examples
+exist. No exporter code, snapshot or manifest schema artifact, publisher,
+publication/revocation lock, dashboard product repository, object/static
+publication, fault-test suite, or deployment has been implemented or runtime
+verified.
+
 ## Next milestone
 
 Close the remaining repeatability gaps in the manual runner: install a durable

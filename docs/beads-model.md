@@ -12,6 +12,35 @@ repository's canonical Beads database. A multi-component product still has one
 product Beads database; components and packages are routing metadata, not
 separate task stores.
 
+## Public projection
+
+Public visibility is an optional derived projection, not a second Beads
+database. Registration and policy default it off. The Oracle may export only a
+repository explicitly enabled with a public alias and display name. It creates
+fields from the public allowlist rather than copying raw `bd` output.
+
+A canonical task is excluded unless the root-provisioned, operator-owned
+public-copy manifest maps its exact normalized repository identity and
+canonical Bead ID to content-bound public ID, title, and summary values. There
+is no repository-wide or task-metadata approval path. Canonical titles and
+purported public fields in Beads are not assumed safe. Bodies and descriptions,
+acceptance criteria, comments and notes, owners and assignees, email addresses,
+internal labels and metadata, external references, paths and remotes, commands,
+logs, evidence, credentials, and arbitrary URLs never enter the projection.
+Relationships are projected only when both tasks are public.
+
+The public status is an observation, not execution evidence. In particular,
+`in_progress` does not prove that a worker is live. The last successful sync
+time and staleness state must be displayed with it. The public snapshot cannot
+be used to claim, update, block, or close work.
+
+The manifest's monotonic authorization revision and content digest bind every
+candidate. Under the exclusive lock, revocation advances the revision and
+conditionally replaces the preprovisioned object with a newly authorized or
+valid empty snapshot before confirming cache invalidation. Even when canonical
+Beads is unavailable, a stale task survives only while its exact approval
+remains current.
+
 ## Ownership
 
 The Oracle is the only actor allowed to claim, update, block, or close Beads.

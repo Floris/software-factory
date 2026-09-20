@@ -15,12 +15,25 @@ Executable orchestration tooling will be implemented and tested on the Linux
 VPS, where Codex CLI, Beads, systemd, Git credentials, and the restricted K3s
 observer identity are available.
 
+It also defines the accepted contract for an optional public Beads dashboard:
+a separate Next.js product may consume only a versioned, allowlisted snapshot
+produced by a read-only exporter and separate publisher. Public copy is
+approved only through a content-bound, root-owned operator manifest; repository
+and Bead content cannot approve itself. The exporter, manifest schema/runtime
+artifact, snapshot schema, publisher, locking/revocation mechanism, product
+repository, snapshot hosting, and deployment are not implemented or
+runtime-verified here; see
+[ADR 0002](docs/decisions/0002-public-beads-dashboard.md) and the
+[roadmap](ROADMAP.md).
+
 ## Sources of truth
 
 - Product repositories own application code, tests, and product Beads.
 - `website-k8s` owns Kubernetes and ArgoCD desired state plus deployment Beads.
 - This repository owns factory policy, orchestration behavior, onboarding
   configuration, and factory-development Beads.
+- The root-provisioned operator manifest owns the exact approved public task
+  identifiers, titles, and summaries.
 - GitHub records reviewed changes; GHCR stores immutable images; ArgoCD is the
   only component that reconciles permanent Kubernetes changes.
 
@@ -140,6 +153,7 @@ codex
 - [Beads model](docs/beads-model.md)
 - [Roadmap](ROADMAP.md)
 - [Why this is a separate repository](docs/decisions/0001-separate-control-repository.md)
+- [Public Beads dashboard decision](docs/decisions/0002-public-beads-dashboard.md)
 
 ## VPS bootstrap boundary
 

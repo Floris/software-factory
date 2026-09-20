@@ -87,6 +87,70 @@
   ownership repair is an explicit operator recovery action, not a permission
   held by the factory service.
 
+### Public snapshot exporter and publisher
+
+- Public export and public publication are separate, default-deny policy
+  capabilities. The Oracle-owned exporter has read-only access to canonical
+  Beads state for only explicitly public-enabled registered repositories. It
+  has no public-object write credential.
+- Public copy comes only from the operator-owned manifest bound by root-owned
+  host configuration. Each content-digested entry binds an exact normalized
+  repository identity and canonical Bead ID to exact public ID, title, and
+  summary values. Repository files and Bead fields cannot create or modify an
+  approval; missing, changed, unknown, forged, duplicate, or cross-repository
+  mappings fail closed.
+- The publisher can replace only the configured snapshot object and purge only
+  its associated cache through two operation-specific non-secret credential
+  references. It cannot delete the object or read `.beads`, Dolt, canonical
+  repositories, source worktrees, Git credentials, or Kubernetes state. No
+  missing or mismatched binding falls back to another credential.
+- The operator preprovisions that object once as a schema-valid empty snapshot
+  before enabling automation. The backend must condition every replacement on
+  the exact prior generation and assign a monotonically advancing,
+  non-reusable generation. Content ETags, absence-based creation, and
+  reusable/resetting versions are insufficient. Durable idempotency is only an
+  additional defense unless its provider guarantee permanently fences every
+  duplicate.
+- Candidates stay private until complete schema validation succeeds. The
+  schema is versioned, recursively rejects unknown fields, enforces bounded
+  task count and byte size, and contains only the allowlist in ADR 0002. Raw
+  `bd` output is never a publication artifact.
+- Failed export or publication preserves the last valid public snapshot. A
+  repository without a first successful export is unavailable, never
+  represented as an empty task set. Stale data is reauthorized against the
+  current manifest even when the source repository is unavailable.
+- Publication and revocation acquire one exclusive public-dashboard lock
+  before any trusted manifest/revision change or external mutation. The lock
+  is retained through durable `pending -> executing -> completed` state,
+  acknowledged mutation, exact remote outcome observation, and cache-purge
+  confirmation. The record binds the expected prior generation,
+  authorization revision/digest, candidate digest, operation ID, successor
+  generation, and observed result.
+- A timeout or ambiguous response remains `executing` and blocks every later
+  publication or revocation. Recovery reacquires the lock and requires the
+  expected successor generation plus proof that the backend accepted or
+  durably deduplicated the exact operation and that every older-generation
+  condition is permanently invalid; matching content alone is not enough. It
+  resolves or retries only under the recorded prior-generation
+  precondition. Revocation is complete only after the reauthorized or valid
+  empty snapshot, exact-operation proof, confirmed cache invalidation, and
+  reconciliation of every earlier uncertain mutation.
+- Physical deletion is outside publisher authority. An operator may perform it
+  only after disabling publication, reconciling every `executing` operation,
+  and making automation unable to issue further writes.
+- Copies already downloaded by a client cannot be recalled; approvals
+  therefore treat public fields as permanently discloseable.
+
+### Public dashboard
+
+- The separate Next.js product reads one configured public snapshot origin
+  and validates the exact supported schema before rendering.
+- It has no filesystem, `.beads`, Dolt, canonical repository, credential, Git,
+  or Kubernetes access. It exposes no mutation endpoint or Server Action and
+  implements no generic URL/fetch proxy.
+- Public text is escaped and rendered as plain text. HTML, MDX, external
+  images, arbitrary links, and unknown schema fields or versions fail closed.
+
 ### Kubernetes observer
 
 - Is limited to opted-in DEV namespaces.

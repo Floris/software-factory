@@ -15,6 +15,28 @@ runtime_root: /srv/software-factory/runtime
 # tracked `sync.remote` in a product repository's `.beads/config.yaml`.
 # Legacy entries without this field are parseable for supervised migration but
 # fail unattended preflight until every required operation is configured.
+# Public dashboard publication is also default-off. The optional global block
+# binds one exact public object and one root-owned public-copy manifest. The
+# manifest is operator data outside repositories and Beads; repository content
+# cannot approve public copy. Existing version 1 files without these optional
+# global or per-repository blocks remain parseable and private; missing blocks
+# or bindings grant no authority.
+
+public_dashboard:
+  enabled: false
+  publisher_policy: factory-control
+  schema_version: 1
+  public_read_url: https://dashboard.example.invalid/snapshots/tasks-v1.json
+  public_copy_manifest: /etc/software-factory/public-dashboard-copy.yaml
+  object:
+    audience: object-store://example-public-dashboard
+    ref: snapshots/tasks-v1.json
+    preprovisioned: true
+    conditional_replace_required: true
+    non_reusable_generation_required: true
+  credential_refs:
+    object_publish: credential-provider://public-dashboard/object-publish
+    cache_purge: credential-provider://public-dashboard/cache-purge
 
 repositories:
   - id: factory-control
@@ -29,6 +51,12 @@ repositories:
       git_read: credential-provider://factory-control/git-read
       git_write: credential-provider://factory-control/git-write
       beads_sync: credential-provider://factory-control/beads-sync
+    public_dashboard:
+      # Factory Beads opt in independently from global publisher authority.
+      # This tracked example remains private.
+      enabled: false
+      public_alias: factory
+      display_name: Software Factory
 
   # `deployment` is the version 1 shorthand retained for a repository with one
   # deployable component. New multi-component registrations use `deployments`.
@@ -70,6 +98,12 @@ repositories:
     validation:
       commands:
         - [make, verify]
+    public_dashboard:
+      # An operator changes this to true only after approving the public copy
+      # in the root-owned manifest. This tracked example remains private.
+      enabled: false
+      public_alias: example-suite
+      display_name: Example Suite
     components:
       - id: api
         source: services/api

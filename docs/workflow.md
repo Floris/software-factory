@@ -72,6 +72,129 @@ Likewise, a legacy one-component entry without package metadata may perform
 only operations whose bindings and audiences can be proven; package publication
 or deployment delivery waits for the component/package mapping migration.
 
+## Public snapshot publication
+
+Public task visibility is a separate, optional workflow. Merely registering a
+repository does not publish it. Root-owned host configuration must enable the
+global `public_dashboard` registration and bind its exact object audience/ref,
+public read URL, factory publisher policy, root-owned public-copy manifest,
+and separate object-publish and cache-purge credential
+references. Each contributing repository must also explicitly enable its own
+`public_dashboard`, choose a public alias and display name, and select a policy
+that permits contribution export. Missing, conflicting, overly broad, or
+unresolved values deny the operation without credential fallback.
+Before enabling automation, the operator provisions the bound object once as a
+schema-valid empty snapshot. The global binding must require conditional
+replacement by exact observed prior generation and a non-reusable,
+monotonically advancing generation for every replacement. Content ETags,
+absence-based creation, and generations that reset or can be reused do not
+qualify. The factory-control repository follows the same independent
+contribution opt-in as any product; global publisher authority alone does not
+expose its Beads.
+
+The operator owns `/etc/software-factory/public-dashboard-copy.yaml`, outside
+repositories and Beads. Its monotonic authorization revision, canonical
+content digest, and per-task digests bind each exact normalized repository
+identity and canonical Bead ID to exact public ID, title, and summary values.
+The exporter ignores purported approval in Bead or repository content. There
+is no repository-wide title policy in the initial version. Unknown tasks,
+duplicates, changed content or digest, and reuse for another repository fail
+closed.
+
+On the configurable schedule (initial default 60 seconds), the Oracle-owned
+read-only exporter:
+
+1. reads each enabled repository independently after its normal synchronized
+   canonical-state checks and joins tasks only to exact current manifest
+   entries;
+2. constructs allowlisted public fields one by one, never by copying raw `bd`
+   output, excluding tasks without approved public copy and relationships whose
+   other endpoint is not public;
+3. records `observedAt` for the attempt and, on success,
+   `lastSuccessfulSyncAt` for the derived task set;
+4. retains only the currently authorized subset of a failed repository's last
+   valid set as `stale`, or marks it `unavailable` without a task set if no
+   successful snapshot exists;
+5. assembles a complete candidate in private runtime storage, stamps the
+   prospective `publishedAt`, captures the current manifest revision and
+   digest in its private publication record, and validates the exact version,
+   closed field sets, enums, timestamps, relationship integrity,
+   per-repository task limit, and global byte limit; and
+6. acquires the exclusive public-dashboard publication/revocation lock and
+   first reconciles any durable operation still in `executing`, then reloads
+   registration and manifest and reauthorizes current and stale tasks;
+7. observes the exact remote object generation and persists a
+   `pending` record with that precondition, authorization revision/digest,
+   candidate digest, stable operation ID, empty successor generation, and empty
+   observed result; and
+8. persists `executing`, invokes conditional replacement with the recorded
+   prior generation and idempotency token where supported, observes the
+   non-reusable successor generation and content, proves through provider
+   evidence or trusted object metadata that the backend accepted/deduplicated
+   that exact operation and every older generation precondition is permanently
+   invalid, confirms relevant cache invalidation, persists the observed result
+   and `completed`, and only then releases the lock. Matching content without
+   successor-generation and exact-operation proof is not completion. A failed
+   check or validation leaves the previous object intact.
+
+Repositories can have different observation times in one publication; this is
+not a globally transactional snapshot. The dashboard initially refreshes the
+object every 30 seconds and warns after 5 minutes without a successful sync.
+These timings are configurable defaults. It must present `unavailable` as
+unknown data rather than zero tasks, and must not describe `in_progress` as
+proof of a live worker.
+
+Revocation acquires the same exclusive lock before changing the trusted
+authorization revision or manifest and first reconciles any earlier
+`executing` publication or revocation. While holding the lock, it advances the
+revision and manifest only after observing the current remote generation
+and persisting a `pending` record that binds the current and intended
+authorization revisions/digests, expected remote precondition, candidate
+digest, and operation ID. It durably applies the new manifest, moves to
+`executing` before the external call, and conditionally replaces the object
+with a snapshot reauthorized against the new manifest. Revoking all
+publication replaces it with the schema-valid empty snapshot. The publisher
+never deletes the object. The operation remains `executing` until the
+non-reusable successor generation, expected content, and exact-operation proof
+are observed and the relevant cache purge is confirmed; only then does it
+persist `completed` and release the lock.
+
+A publication already admitted under the lock finishes before revocation may
+start. A candidate merely built under an older revision is rejected after it
+later acquires the lock. A timeout, lost acknowledgement, or ambiguous remote
+or cache response stays `executing`; while the process is alive the lock stays
+held, and after interruption its durable state blocks admission. Recovery
+reacquires the lock and records success only after observing the expected
+successor generation plus evidence that the backend accepted/deduplicated the
+exact operation and permanently fenced every older generation. Desired content
+by itself is insufficient. Otherwise it retries only with the recorded
+prior-generation precondition and operation ID.
+No later candidate can publish until this reconciliation completes, so a
+delayed old write cannot restore revoked data.
+
+Disabling the global publisher, repository, or task follows this path.
+Revocation is complete only when the exact object at the non-reusable successor
+generation is confirmed to contain only the newly authorized or valid empty
+snapshot, the exact operation is proven, relevant cache invalidation is
+confirmed, and no prior uncertain mutation remains. A source outage cannot
+preserve revoked stale data. Previously downloaded copies cannot be recalled.
+Physical object deletion is an operator-only post-disable action after every
+ambiguous operation is reconciled and automation is unable to issue writes; it
+is outside publisher workflow and authority. The exact schema and content
+prohibitions are defined by
+[ADR 0002](decisions/0002-public-beads-dashboard.md).
+
+The implementation validation profile must fault-test forged task metadata,
+modified public copy or digest, unknown task IDs, cross-repository approval
+reuse, source outage after revocation, and revocation racing both a built
+candidate and the final publication step. It must also inject timeouts and
+ambiguous acknowledgements for replace and cache purge; generation conflicts;
+delayed writes; and restarts, proving recovery fencing and the gate that blocks
+later candidates until reconciliation. The required ABA test starts an initial
+publish at `G0`, loses its acknowledgement, retries/recovers it as `G1`,
+replaces it for revocation as `G2`, and proves the delayed original `G0`
+upload fails.
+
 ## Task intake
 
 A human or approved planning process creates a Bead in the repository that owns

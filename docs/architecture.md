@@ -28,6 +28,15 @@ Human
   -> read-only deployment verification
   -> safe local task branch and worktree cleanup
   -> Beads completion
+
+Public observer
+  -> separate Next.js dashboard
+       -> versioned sanitized public snapshot only
+
+Software Factory Oracle
+  -> deterministic read-only snapshot exporter
+       -> private candidate and strict schema validation
+       -> separately scoped atomic publisher
 ```
 
 ## Source-of-truth boundaries
@@ -42,6 +51,78 @@ Human
 | Runtime reconciliation | ArgoCD |
 | Factory behavior and policy | This repository |
 | Workspace routing | Workspace-root `AGENTS.md` and `agents-md` |
+| Approved public task copy | Root-provisioned operator manifest |
+| Approved public work view | Versioned sanitized snapshot |
+| Public dashboard application behavior | Separate dashboard product repository |
+| Public dashboard deployment state | `website-k8s` Git history |
+
+## Public work-view boundary
+
+The public work view is a derived publication, never another task-state source
+of truth. A deterministic Oracle-owned exporter reads synchronized canonical
+Beads state only for repositories that are both registered and explicitly
+enabled for public publication. It constructs a new, versioned snapshot from a
+strict field allowlist; it never copies raw `bd` output. All objects reject
+unknown fields. The only copy authority is an operator-owned, root-provisioned
+manifest outside repositories and Beads. Its content-bound entries map an
+exact normalized repository identity and canonical Bead ID to the exact public
+ID, title, and summary. Repository or task content cannot grant approval.
+Relationships are included only when both endpoint tasks are public.
+
+The exporter writes and validates a complete candidate in private runtime
+storage. A top-level, default-off host registration binds the manifest, exact
+object audience/ref, public read URL, global publisher policy, and separate
+publish/cache-purge credential references. A distinct publisher capability
+can conditionally replace only that object and purge its cache; it
+cannot read Beads, Git, or canonical checkouts. A selected repository policy
+grants contribution export and a per-repository task limit; factory-control
+Beads can opt in by the same independent repository mechanism. Global factory
+policy separately grants publication/revocation and the aggregate byte limit.
+Publisher credentials remain only in the global registration. Missing,
+conflicting, or broader bindings deny the operation without credential
+fallback.
+
+Repository observations are independent. A failed repository read retains its
+last valid public task set as `stale`, while a repository without a first valid
+snapshot is `unavailable` rather than empty. Other repositories continue to
+publish, so one snapshot is not globally transactional. The contract keeps
+per-repository `observedAt` and `lastSuccessfulSyncAt` distinct from the
+object's `publishedAt`. Failed candidate validation or publication preserves
+the last valid public object, but stale fallback is filtered against current
+manifest authorization.
+
+Publication and revocation acquire one exclusive public-dashboard lock before
+any authorization or external mutation. The lock is retained through durable
+`pending -> executing -> completed` state, acknowledged conditional mutation,
+observation of the exact remote generation/content, and cache-purge
+confirmation. Records bind the prior generation, authorization
+revision/digest, candidate digest, operation ID, and observed result.
+
+The operator preprovisions the exact object once with a schema-valid empty
+snapshot. Automation never deletes it; publication and revocation only
+conditionally replace the recorded prior generation. The backend must provide
+a non-reusable, monotonically advancing generation for every replacement.
+Content ETags, absence-based creation, or reusable/resetting versions are not
+sufficient. Stable idempotency may add defense but cannot replace this fence.
+
+An ambiguous response stays `executing` and blocks every later operation.
+Recovery under the same lock observes the expected successor generation,
+content, and provider or trusted-object evidence that the exact operation was
+accepted/deduplicated and every older generation precondition is permanently
+invalid; desired content alone is insufficient. Revocation is complete only
+after the reauthorized (or valid empty) snapshot exists at that successor
+generation, cache invalidation is confirmed, and no uncertain prior mutation
+remains. Physical deletion is operator-only after disablement,
+complete reconciliation, and removal of automation write authority. This
+prevents ABA replay and revoked stale data surviving a source outage.
+
+The separate Next.js product consumes only that public object. It has no
+access to `.beads`, Dolt, canonical repositories, host filesystems,
+credentials, Git, Kubernetes, mutation endpoints, Server Actions, or a generic
+fetch proxy. It renders approved strings as escaped plain text without HTML,
+MDX, external images, or arbitrary links. See
+[ADR 0002](decisions/0002-public-beads-dashboard.md) for the exact allowlist,
+failure behavior, revocation contract, and alternatives.
 
 ## VPS filesystem layout
 
