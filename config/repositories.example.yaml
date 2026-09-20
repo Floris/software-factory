@@ -11,6 +11,8 @@ runtime_root: /srv/software-factory/runtime
 # Canonical checkouts stay clean; task changes happen only in Git worktrees.
 # `credential_refs` values are non-secret lookup keys. The credential provider,
 # not this file, stores and returns credential material for the exact operation.
+# The `beads.remote` value is host registration data; do not duplicate it as a
+# tracked `sync.remote` in a product repository's `.beads/config.yaml`.
 # Legacy entries without this field are parseable for supervised migration but
 # fail unattended preflight until every required operation is configured.
 
