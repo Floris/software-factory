@@ -12,6 +12,9 @@ policies:
       push_branch: true
       open_pull_request: true
       merge_pull_request: false
+      delete_branch: false
+    lifecycle:
+      delete_merged_remote_branch: true
     kubernetes:
       observe: false
       mutate: false
@@ -28,6 +31,9 @@ policies:
       push_branch: true
       open_pull_request: true
       merge_pull_request: false
+      delete_branch: false
+    lifecycle:
+      delete_merged_remote_branch: true
     kubernetes:
       observe: true
       mutate: false
@@ -43,6 +49,9 @@ policies:
       push_branch: true
       open_pull_request: true
       merge_pull_request: false
+      delete_branch: false
+    lifecycle:
+      delete_merged_remote_branch: true
     kubernetes:
       observe: true
       mutate: false
