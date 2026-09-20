@@ -41,11 +41,15 @@ delegation, integration, and final verification.
    deployment policy before execution.
 4. Give workers read-only access to Beads; workers must not edit `.beads`.
 5. Keep a task open until its requested delivery level is verified.
-6. Before closing a merged task, the Oracle acquires the exclusive lifecycle
-   cleanup lock and safely removes its exact task branch and dedicated
-   worktree using durable per-step state and an atomic remote-ref lease as
-   specified in `docs/workflow.md`.
-7. Only the Oracle blocks, updates, cleans up, or closes tasks.
+6. Immediately after a true merge is verified, the Oracle acquires the
+   exclusive lifecycle lock and deletes only the exact merged remote task ref
+   using durable per-step state and a SHA-bound atomic lease as specified in
+   `docs/workflow.md`. Squash and rebase outcomes fail the ancestry check.
+7. Retain the dedicated worktree and local branch until delivery verification.
+   Before closure, the Oracle reacquires the lock, verifies the earlier remote
+   deletion evidence, and safely removes those exact local resources.
+8. Only the Oracle blocks, updates, mutates pull requests, manages branches or
+   worktrees, runs lifecycle operations, or closes tasks.
 
 ## Agent roles
 
@@ -54,10 +58,18 @@ definitions live in `.codex/agents/` so they are available from the single
 factory entrypoint for every configured project.
 
 - `project_architect` performs bounded, read-only analysis and produces an
-  implementation brief.
+  implementation brief using its explicitly pinned architecture model.
 - `app_worker` implements exactly one Bead in its assigned project worktree.
 - `quality_reviewer` performs a read-only review against the Bead and the
-  target repository's instructions.
+  target repository's instructions using its explicitly pinned review model.
+
+The role files pin their own model and reasoning effort. There is no global
+agent-model override: the Oracle remains independently configurable, while
+each delegated role keeps a reviewed capability and cost profile. Delegated
+roles never create or delete branches or worktrees, mutate pull requests, or
+run lifecycle cleanup. Architects and reviewers make no external mutations,
+and all delegated roles run only trusted validation commands supplied by the
+Oracle or host configuration.
 
 Every delegated agent must read the target repository's `AGENTS.md`. Product
 invariants stay in the product repository instead of being copied into these

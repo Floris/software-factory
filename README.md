@@ -32,10 +32,12 @@ Beads ready work
     -> isolated Git worktree
     -> Codex implements and validates
     -> branch and pull request
+    -> verified true merge and leased remote task-branch deletion
     -> CI builds immutable image
     -> website-k8s deployment task and pull request
     -> ArgoCD reconciles DEV
     -> factory verifies health
+    -> local task worktree and branch cleanup
     -> Beads task closes
 ```
 
@@ -105,6 +107,14 @@ The tracked [`.codex/config.toml`](.codex/config.toml) applies the factory's
 shared sandbox and approval policy whenever this trusted repository is opened
 with Codex. It also makes the factory `worktrees/` and `runtime/` directories
 writable, so the CLI does not need repeated `--add-dir` flags.
+
+Project-scoped role definitions under [`.codex/agents/`](.codex/agents/) pin
+role-appropriate models and reasoning effort: the architect and reviewer use
+the higher-capability analysis model, while the implementation worker uses the
+bounded implementation model. No global agent model is set. Role definitions
+also enforce that delegated agents cannot create or delete branches or
+worktrees, mutate pull requests, or run lifecycle cleanup; those operations
+belong to the Oracle.
 
 Machine-local Codex state remains in `/home/codex/.codex/` on the VPS. Project
 trust records, TUI state, authentication files, and tokens must never be copied

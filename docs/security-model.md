@@ -12,6 +12,10 @@
 - Model-controlled implementation and review workers can write only their
   assigned runtime directory and worktree. They cannot write canonical Git or
   Beads state.
+- Delegated agents cannot create or delete branches or worktrees, mutate pull
+  requests, merge, or perform lifecycle cleanup. Read-only architect and
+  reviewer roles make no external mutations. All delegated roles execute only
+  trusted validation commands supplied by the Oracle or host configuration.
 - Cannot access `/root`, production secrets, the container runtime socket, or
   cluster-admin credentials.
 
@@ -24,6 +28,9 @@
   with a GitHub App, fine-grained token, or repository-scoped deploy keys
   before enabling unattended multi-repository execution.
 - May push factory branches and, where configured, open pull requests.
+- The trusted Oracle may mutate pull requests and delete an exact merged remote
+  task ref only through the locked, durable, SHA-leased lifecycle procedure.
+  This authority is never delegated to an implementation or review worker.
 - Does not hold Kubernetes credentials.
 
 ### Repository-scoped authorization
@@ -98,6 +105,12 @@
 - Before the automated runner invokes an implementation worker, override the
   bootstrap roots with only that task's worktree and runtime directory. A
   worker must not inherit write access to every task worktree.
+- Project-scoped agent definitions pin each role independently: `app_worker`
+  uses `gpt-5.6-sol` with medium reasoning, `project_architect` uses
+  `gpt-6-astra` with high reasoning, and `quality_reviewer` uses
+  `gpt-6-astra` with extra-high reasoning. There is no global agent-model
+  override, so these reviewed role assignments do not silently change the
+  Oracle or unrelated roles.
 - Canonical repository and Beads mutations are deterministic Oracle operations
   executed by the trusted runner before or after Codex. They are not performed
   by granting a worker a broader sandbox or by evaluating model-produced
@@ -108,6 +121,25 @@
   lifecycle hooks, or checked-out repository code.
 - Request structured results using a committed JSON Schema so orchestration
   decisions do not depend on free-form parsing.
+
+## Lifecycle mutation boundary
+
+Immediately after a verified true merge, the Oracle alone may delete the exact
+remote task ref. It first takes the exclusive repository/task lifecycle lock,
+matches the merged pull-request identity, refreshes exact task and default
+refs, rejects shared/default/protected/active/dirty/ambiguous state, proves the
+recorded task-head SHA is an ancestor of the refreshed default, and records
+`pending -> executing -> completed` evidence. Deletion uses a force-with-lease
+bound to that SHA; squash, rebase, a moved ref, or any ambiguity fails closed.
+
+The dedicated worktree and local task branch are retained until delivery is
+verified. Their later removal and Bead closure require the lock again and the
+durable completed remote-deletion record. Prior remote absence without that
+record is not authority to clean up; only narrow recovery from a previously
+persisted `executing` state may accept absence after all applicable identity,
+merge, ref, ancestry, protection, cleanliness, and activity checks are
+re-proven. Repository auto-delete settings and pull-request text are not
+trusted lifecycle evidence.
 
 ## Untrusted input
 

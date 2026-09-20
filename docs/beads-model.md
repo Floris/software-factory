@@ -38,9 +38,18 @@ recoverable.
 - Human-approval requirements.
 - Related product or deployment Bead IDs.
 
-Execution evidence added later includes branch, pull request, commit, image
-identifier, deployment commit, environment, validation summary, and verification
-result.
+Execution evidence added later includes branch, pull request, commit, the
+durable merge-time remote-ref deletion record and status, image identifier,
+deployment commit, environment, validation summary, local-cleanup status, and
+verification result.
+
+The Bead remains open after the merged remote task ref is deleted. Only the
+Oracle records that deletion after a true-merge ancestry proof and SHA-leased
+operation. Delivery verification happens before the Oracle removes the retained
+local branch and worktree and closes the task. A later closure may accept an
+already absent remote ref only from its durable `completed` evidence, or under
+the workflow's narrow recovery rule for a step already persisted as
+`executing`; absence in `pending` fails closed.
 
 ## Cross-repository work
 

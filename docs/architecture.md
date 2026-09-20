@@ -17,6 +17,8 @@ Human
        -> Codex CLI worker
        -> trusted validation commands
        -> Git branch / pull request
+       -> verified true merge
+       -> leased deletion of exact remote task ref
   -> GitHub CI
        -> immutable GHCR image
   -> linked website-k8s deployment work
@@ -24,7 +26,7 @@ Human
        -> ArgoCD
        -> K3s DEV
   -> read-only deployment verification
-  -> safe task branch and worktree cleanup
+  -> safe local task branch and worktree cleanup
   -> Beads completion
 ```
 
@@ -146,6 +148,9 @@ ready
   -> reviewing
   -> branch_pushed
   -> awaiting_merge
+  -> merge_verified
+  -> remote_ref_deleting
+  -> remote_ref_deleted
   -> image_built
   -> deployment_requested
   -> deploying
@@ -158,38 +163,49 @@ Every transition must be idempotent. After interruption, the runner discovers
 the current Beads, Git, pull-request, CI, image, and ArgoCD state before it
 performs another mutation.
 
-`cleaning_up` is an Oracle-owned completion gate. Before resolving targets, the
-Oracle acquires an exclusive repository/task lifecycle cleanup lock from
-trusted factory state. No run may start in the task worktree while this lock is
-held. The Oracle refreshes the remote default branch and requires
+The lifecycle has two Oracle-owned, independently locked phases. Immediately
+after GitHub reports a successful true merge, the merge-time phase deletes the
+exact remote task ref. The Oracle acquires the exclusive repository/task
+lifecycle lock before resolving a target and proves the expected merged pull
+request number, repository, base ref, head ref, and merge commit from trusted
+factory state. It refreshes exactly the remote default and task refs, rejects a
+shared, default, protected, active, or ambiguously owned head after refreshing
+its protection metadata, and requires the remote task ref to equal the recorded
+task-head SHA. It also requires the dedicated worktree to be clean and
+inactive, and it requires
 `git merge-base --is-ancestor <exact-task-head> <refreshed-remote-default>` to
-succeed. It also proves that the dedicated worktree is clean and inactive.
+succeed. A squash or rebase result therefore fails closed; the factory does
+not manufacture ancestry or weaken this proof.
 
-Before mutation, the Oracle writes a trusted, resumable record containing the
-repository, exact branch, task-head SHA, worktree path, default-ref SHA, check
-results, and per-step status. With the lock still held, it checks activity
-again immediately before removing the exact worktree, then deletes the local
-task branch and deletes the exact remote task branch last. Each mutation moves
-durably through `pending -> executing -> completed`, with `executing` recorded
-before invocation and `completed` only after success.
+Before remote mutation, the Oracle writes a trusted, resumable lifecycle record
+containing the repository, merged pull-request identity, exact branch and
+task-head SHA, worktree path, refreshed default-ref SHA, protection and
+identity, cleanliness, and activity results, and a remote-deletion status. The
+step moves durably through `pending -> executing -> completed`: `executing` is
+persisted before the invocation, and `completed` only after an atomic deletion
+with a force-with-lease bound to the recorded task-head SHA succeeds and remote
+absence is observed. A concurrent ref update makes the lease fail closed. The
+Oracle then releases the lock but deliberately retains the dedicated worktree
+and local branch so later delivery and verification can use their exact
+evidence.
 
-Immediately before remote deletion, the Oracle refreshes exactly the remote
-default and task refs, verifies that the task ref still equals the recorded
-task-head SHA, reruns the default/protected exclusions, and reruns exact
-merge-base ancestry against the refreshed remote default. Deletion then uses
-an atomic ref lease bound to the recorded SHA, so a concurrent ref update fails
-closed. The Oracle records final evidence and Bead closure before releasing the
-lock.
+After the requested delivery level is verified, `cleaning_up` is the separate
+closure gate. The Oracle reacquires the same exclusive lifecycle lock, loads
+the prior record, and requires the remote-deletion step to be `completed`.
+Prior remote absence is accepted only with that durable completed evidence, or
+during narrow recovery of a step already recorded as `executing` when the
+exact trusted identity still matches and every applicable merge, ref,
+ancestry, protection, cleanliness, and activity check can be re-proven.
+Absence while `pending` blocks. The Oracle rechecks that the retained worktree
+is clean and inactive, then removes only the recorded exact worktree and local
+task branch, each with its own durable `pending -> executing -> completed`
+state, and closes the Bead only after both steps complete.
 
-On partial failure, the Oracle holds the lock while safely recording current
-state, leaves the Bead open, and permits a later lock holder to revalidate and
-resume idempotently from the recorded step. On recovery, an absent exact
-resource in `executing` may be marked complete only when its trusted identity
-record and every remaining applicable identity, ref, ancestry, and protection
-check still pass; absence in `pending` or any ambiguity blocks. Failure or
-ambiguity preserves remaining resources. Default or protected branches,
-unmerged or active task branches, dirty or active worktrees, and resources
-without an unambiguous task mapping are never cleanup targets.
+On partial failure, the Oracle records current state while holding the lock,
+leaves the Bead open, and permits a later lock holder to revalidate and resume
+idempotently. Any shared, default, protected, updated, active, dirty,
+unmerged, ambiguously mapped, or otherwise unprovable ref or worktree fails
+closed and preserves all remaining resources.
 
 ## Concurrency
 
