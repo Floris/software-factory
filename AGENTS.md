@@ -56,11 +56,16 @@ claim sources.
 8. Only the Oracle blocks, updates, mutates pull requests, manages branches or
    worktrees, runs lifecycle operations, or closes tasks.
 
-In policy, `git.delete_branch: false` denies branch deletion to delegated and
-model-controlled Git operations. The separate
-`lifecycle.delete_merged_remote_branch: true` authorizes only the deterministic
-Oracle runner's locked, durable, exact merged remote task-ref deletion; it is
-not authority to execute a model-produced deletion command.
+In policy, `git.delete_branch: false` denies branch deletion to delegated
+agents. `lifecycle.delete_merged_remote_branch: true` authorizes only the root
+Oracle's exact merged task-ref lifecycle procedure. In a supervised Codex
+session, the Oracle may run that procedure directly, without a root-installed
+runner or GitHub token, using the authenticated GitHub connector for PR and
+repository facts and Git over SSH for exact refs. It must follow
+`docs/supervised-lifecycle.md`: record evidence before and after each mutation,
+hold the task lock, require a true merge and a clean inactive worktree, and use
+a SHA-bound atomic lease. Missing or ambiguous facts block deletion. This
+authority does not extend to other refs or delegated agents.
 
 ## Agent roles
 

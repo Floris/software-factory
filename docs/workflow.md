@@ -110,7 +110,7 @@ cleanup. Architects and reviewers make no external mutations. Delegated roles
 run only trusted validation commands supplied by the Oracle or recorded in
 host configuration.
 
-Every activation of a task worktree, including the start of a worker, reviewer,
+For unattended operation, every activation of a task worktree, including the start of a worker, reviewer,
 or other factory run, must acquire shared participation in the same exact
 repository/task lifecycle lock used by cleanup and retain it until that run is
 inactive. A run cannot start while the Oracle holds the exclusive lock, and the
@@ -135,16 +135,19 @@ activity marker or one-time check of the lock is not sufficient on its own.
 
 ## Merge-time remote branch deletion
 
-The reviewed implementation and its host installation gates are described in
-[the lifecycle runner guide](lifecycle-runner.md). The source-tree script is
-not a trusted runner until installed outside model write authority.
+The reviewed implementation and its unattended host installation gates are
+described in [the lifecycle runner guide](lifecycle-runner.md). Attended
+sessions may use [the supervised procedure](supervised-lifecycle.md) from the
+clean canonical factory `main` checkout, with private connector evidence and
+an explicit root-owned lifecycle policy. This mode trusts the root Oracle's
+attestation of GitHub PR, repository, and branch-protection facts.
 
 The Oracle owns every lifecycle mutation. Immediately after a successful merge
 is observed, and before waiting for image, deployment, or promotion delivery,
 it first requires `lifecycle.delete_merged_remote_branch: true` from the
 selected root-owned policy. `git.delete_branch: false` remains the prohibition
-for delegated and model-controlled Git operations; the lifecycle key authorizes
-only this deterministic Oracle procedure and never a model-produced command.
+for delegated Git operations; the lifecycle key authorizes only the bounded
+Oracle procedure, in installed or supervised mode.
 If that lifecycle key is missing or false, deletion blocks. When authorized,
 the Oracle:
 

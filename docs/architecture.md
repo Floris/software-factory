@@ -91,13 +91,13 @@ entry may additionally declare named components, the OCI package repositories
 each component publishes, and the registered GitOps applications that consume
 those components.
 
-Policy separates model-controlled Git capability from deterministic lifecycle
-authority. `git.delete_branch: false` prevents delegated/model-controlled
-branch deletion. `lifecycle.delete_merged_remote_branch: true` authorizes only
-the trusted Oracle runner's locked, durable deletion of the exact remote task
-ref after a verified true merge. It is neither general branch-delete authority
-nor permission to evaluate a model-produced command. A missing or false
-lifecycle key blocks that remote mutation.
+Policy separates delegated Git capability from Oracle lifecycle authority.
+`git.delete_branch: false` prevents delegated branch deletion.
+`lifecycle.delete_merged_remote_branch: true` authorizes only the root Oracle's
+locked, durable deletion of an exact task ref after a verified true merge. The
+Oracle may use the installed runner or the attended
+[supervised procedure](supervised-lifecycle.md); neither grants general
+branch-delete authority. A missing or false lifecycle key blocks mutation.
 
 Each repository entry also carries non-secret `credential_refs` keyed by
 operation. The
@@ -176,7 +176,13 @@ Every transition must be idempotent. After interruption, the runner discovers
 the current Beads, Git, pull-request, CI, image, and ArgoCD state before it
 performs another mutation.
 
-The lifecycle has two Oracle-owned, independently locked phases. Immediately
+The lifecycle has two Oracle-owned, independently locked phases. The following
+describes the full unattended lock and protection-query design. Supervised
+sessions use the bounded exception in [the runbook](supervised-lifecycle.md):
+the Oracle checks inactivity directly and attests fresh PR, repository, and
+branch-protection facts from the GitHub connector.
+
+Immediately
 after GitHub reports a successful true merge, the merge-time phase deletes the
 exact remote task ref. The Oracle acquires the exclusive repository/task
 lifecycle lock before resolving a target and proves the expected merged pull

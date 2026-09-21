@@ -136,18 +136,28 @@
 
 ## Lifecycle mutation boundary
 
-The manually invoked implementation requires a root-owned installed copy, a
+Attended Oracle sessions may use the [supervised lifecycle
+procedure](supervised-lifecycle.md) from clean factory `main` after the
+root-owned lifecycle policy is enabled. The Oracle attests fresh GitHub
+connector facts in a private short-lived file, including the exact branch SHA
+and `protected: false`. The runner checks exact Git refs and merge ancestry
+and uses a SHA-bound lease. This mode trusts the root Oracle's evidence and its
+direct observation that no task agent is active; existing manual worktrees do
+not participate in a shared lock. It therefore has a narrower trust boundary
+than unattended operation. Any uncertainty blocks the task.
+
+The unattended implementation requires a root-owned installed copy, a
 private durable state directory outside Codex write roots, and a trusted host
 launcher that supplies a repository-scoped GitHub read token through the
 credential provider. It never persists that token. The live version 1 host
-registration and policy without a lifecycle key cannot authorize execution;
+registration or policy without a lifecycle key cannot authorize execution;
 see [the lifecycle runner guide](lifecycle-runner.md).
 
 Root-owned policy keeps two authorities distinct. `git.delete_branch: false`
-denies branch deletion to delegated and model-controlled Git operations.
-`lifecycle.delete_merged_remote_branch: true` authorizes only the trusted
-Oracle runner's locked, durable, exact merged remote task-ref operation. It is
-not general delete authority and never authorizes model-produced commands; a
+denies branch deletion to delegated agents.
+`lifecycle.delete_merged_remote_branch: true` authorizes only the root
+Oracle's locked, durable, exact merged task-ref operation through the
+installed or supervised procedure. It is not general delete authority; a
 missing or false lifecycle key blocks the mutation.
 
 Immediately after a verified true merge, the authorized Oracle may delete the
@@ -160,7 +170,7 @@ force-with-lease bound to that SHA; squash, rebase, a moved ref, or any
 ambiguity fails closed. The lock is held through mutation-result observation
 and durable evidence persistence.
 
-Every activation of that task worktree and every worker, reviewer, or other
+For unattended operation, every activation of that task worktree and every worker, reviewer, or other
 factory run started against it must participate in the same lock in shared mode
 for the run's active lifetime. Consequently, no run can start while lifecycle
 cleanup holds the exclusive lock, and exclusivity cannot begin while a run is
