@@ -30,14 +30,17 @@ foundations without treating them as an operational capability.
     multi-repository execution remains disabled while an account-wide
     bootstrap credential is usable or any required `credential_refs` entry is
     absent.
-- [ ] Cut over to one central Beads database and remote.
-  - Current: the three legacy remotes can be cloned read-only and contain 24
-    unique tasks. A disposable central candidate imported all 24 with
-    repository routing metadata and retained `codex:codex` manifest ownership.
-    This does not prove the inaccessible local factory and Expense Tracker
-    databases have no unsynchronized changes: their manifests are currently
-    `nobody:nogroup`. The host configuration and trusted runner have not been
-    switched. Follow the gated migration runbook before any new claim.
+- [x] Cut over supervised manual work to one central Beads database and remote.
+  - Evidence: the factory database and a fresh independent remote clone have
+    the same 24 issues, all with repository IDs. Seven dependency edges and
+    non-routing issue fields survived import. The central manifest remained
+    `codex:codex` mode `0600` after a successful pull/push cycle. The operator
+    accepted possible loss of changes held only in inaccessible legacy local
+    databases; the old factory database was retained intact.
+- [ ] Migrate host Beads routing and fault-test the trusted runner.
+  - Current: `/etc/software-factory/repositories.yaml` still describes the
+    legacy per-repository layout. No installed runner protects canonical writes
+    from a sandboxed agent. Unattended claims remain disabled.
 - [ ] Register and preflight every opted-in product repository.
   - Current: the tracked contract supports one-to-many components, OCI package
     identities, and GitOps application mappings. Root-owned host registration,
@@ -116,9 +119,9 @@ foundations without treating them as an operational capability.
 
 ## Next milestone
 
-Reconcile the inaccessible legacy Beads databases and cut over to the central
-store through the trusted non-root runner. Fault-test ownership and sandbox
-isolation before resuming claims. Then close the remaining repeatability gaps
+Replace the legacy host registration with the central contract, install the
+trusted non-root runner, and fault-test ownership and sandbox isolation before
+unattended claims. Then close the remaining repeatability gaps
 in the manual runner: install a durable
 trusted Node.js runtime, record one structured worker result, and execute the
 configured validation profile from orchestration rather than an ad hoc shell.

@@ -1,6 +1,6 @@
 # ADR 0002: Use one factory Beads task store
 
-- Status: Accepted; operational cutover pending
+- Status: Accepted; manual cutover complete, unattended routing pending
 - Date: 2026-09-21
 
 ## Context
@@ -26,12 +26,13 @@ ownership, directory mode, manifest mode, and readability before and after each
 write. Codex and delegated workers receive read-only task snapshots. Unexpected
 ownership stops writes and publication; repair is an explicit operator action.
 
-The migration is a gated operation: freeze old writes, prove source freshness,
-archive each full Dolt history, import issues preserving IDs and relationships,
-validate the candidate, then switch host routing under an exclusive lock. Old
-databases and remotes remain read-only for audit. The central store is not live
-until the cutover and runner fault tests in [the migration runbook](../central-beads-migration.md)
-pass.
+For the 2026-09-21 manual cutover, the operator accepted possible loss of
+changes that existed only in the inaccessible local factory and Expense Tracker
+databases. The three remotes supplied the 24 retained issues; old databases and
+remotes remain for audit. The central factory database and remote now contain
+those issues. This one-time data-loss decision is not a general recovery rule.
+Unattended host routing and runner fault tests remain gated by
+[the migration runbook](../central-beads-migration.md).
 
 ## Consequences
 
@@ -41,6 +42,7 @@ pass.
 - A single task store reduces routing and synchronization complexity but creates
   one availability boundary; ownership checks, backups, and fail-closed recovery
   are required.
-- The earlier per-repository Beads placement in the architecture and workflow
-  documentation is superseded only after the operational cutover. Until then,
-  no new claims are made from either layout.
+- The earlier per-repository placement is superseded for supervised manual
+  work. The legacy host registration is not an authority to write old stores;
+  unattended claims stay disabled until it is replaced and the runner passes
+  fault tests.

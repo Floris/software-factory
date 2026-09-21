@@ -84,16 +84,20 @@
 - Workers receive Bead contents as untrusted, read-only input. Only the Oracle
   mutates or synchronizes canonical Beads state, and worker identities receive
   neither canonical Beads write access nor its remote-push credentials.
-- The runner executes fixed Beads operations as the dedicated non-root account
-  outside Codex's workspace sandbox. It pins the canonical database identity
-  and validates path, symlinks, owner, directory and manifest modes, and
-  readability before and after every write. It does not accept caller-supplied
-  database paths or arbitrary commands. Unexpected ownership or an unreadable
-  database halts claims and publication. Host-level ownership repair is an
-  explicit operator recovery action, not a permission held by the service.
-- Moving to one store does not by itself repair the recurring `nobody:nogroup`
-  manifest fault. The migration requires a real wrong-owner fault test and a
-  normal operation test before any central claim.
+- During supervised manual work, only the Oracle runs bounded Beads operations
+  as the dedicated non-root account outside Codex's workspace sandbox and
+  checks ownership and modes before and after each write. Unattended work needs
+  an installed trusted runner outside model write authority. It pins the
+  canonical database identity and validates path, symlinks, owner, directory
+  and manifest modes, and readability before and after every write. It does not
+  accept caller-supplied database paths or arbitrary commands. Unexpected
+  ownership or an unreadable database halts claims and publication. Host-level
+  ownership repair is an explicit operator recovery action, not a permission
+  held by the service.
+- Moving to one store does not by itself prevent the recurring `nobody:nogroup`
+  manifest fault. The new central manifest retained the correct owner after a
+  supervised sync. Wrong-owner and normal-operation fault tests remain gates
+  for unattended claims.
 
 ### Kubernetes observer
 

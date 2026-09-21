@@ -35,8 +35,10 @@ Kubernetes manifests.
 The root orchestrator is the Oracle. It owns planning, claims, Beads state,
 delegation, integration, and final verification. The intended task source is
 one central Beads database in this repository; every task carries a validated
-`repository_id`. The [migration runbook](docs/central-beads-migration.md) gates
-the cutover. Do not claim from either layout until that gate passes.
+`repository_id`. The [migration runbook](docs/central-beads-migration.md)
+records the completed manual cutover and gates unattended operation. Supervised
+Oracle work uses only the central store; the legacy product stores are not
+claim sources.
 
 1. Synchronize Beads and inspect ready work.
 2. Claim exactly one implementation task.

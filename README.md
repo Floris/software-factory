@@ -11,8 +11,10 @@ state.
 
 The repository currently contains the architecture, security boundaries,
 Beads conventions, migration runbook, workflow, roadmap, and example
-configuration. The decision to centralize Beads is accepted; the operational
-cutover is still gated by source reconciliation and trusted-runner fault tests.
+configuration. The manual task-store cutover is complete: the factory's
+canonical Beads database and remote contain the factory, product, and
+deployment tasks. Unattended routing remains gated by host-configuration
+migration and trusted-runner fault tests.
 Executable orchestration tooling will be implemented and tested on the Linux
 VPS, where Codex CLI, Beads, systemd, Git credentials, and the restricted K3s
 observer identity are available.

@@ -2,88 +2,78 @@
 
 ## State on 2026-09-21
 
-This is a cutover runbook, not a record of completed cutover. Stop new claims
-while the task store is ambiguous. The `software-factory` and `expense-tracker`
-local manifests are `nobody:nogroup`, mode `0600`; their databases cannot be
-opened by the factory account. A narrow `chown` attempt on the Expense Tracker
-manifest returned `Operation not permitted`. Do not use root from the factory,
-weaken permissions, delete the manifests, or replace the originals with remote
-clones.
+The manual task-store cutover used the three Dolt remotes as its source. The
+operator accepted possible loss of changes that existed only in the unreadable
+local databases. The former `software-factory` and `expense-tracker` manifests
+were `nobody:nogroup`, mode `0600`; a narrow `chown` attempt on the latter
+returned `Operation not permitted`. The factory did not use root or weaken
+permissions.
 
 The two affected paths are:
 
 - `/srv/software-factory/repos/software-factory/.beads/embeddeddolt/sf/.dolt/noms/manifest`
 - `/srv/software-factory/repos/expense-tracker/.beads/embeddeddolt/et/.dolt/noms/manifest`
 
-An administrator can restore only those owners to `codex:codex` after taking
-recovery copies. The factory then reopens the databases read-only and compares
-them to the frozen remotes before any migration write.
+The original factory `.beads` directory was moved intact to a private recovery
+directory. The Expense Tracker original remains untouched. Their inaccessible
+local state was not compared with the remotes, so any unsynchronized changes
+there are outside the new canonical store.
 
 Read-only clones of the three configured Dolt remotes exported 10 `sf`, 6 `et`,
-and 8 `wk` issues. All 24 IDs are unique. The Expense Tracker remote includes
-`et-2vx` in its state before the merged Expense Tracker pull request #7 was
-reconciled. These remote snapshots prove recoverability, but not that the
-inaccessible local databases have no unsynchronized changes. Disposable `/tmp`
-clones and JSONL exports are neither durable backups nor cutover evidence.
+and 8 `wk` issues. All 24 IDs are unique. A candidate imported them with
+`metadata.repository_id`; comparison showed unchanged non-routing issue fields
+and seven retained dependency edges. The candidate replaced the factory's old
+`.beads` directory, then `bd sync` pulled and pushed successfully to the
+existing factory Dolt remote. A fresh independent clone of that remote
+contained exactly the same 24 issue records and all 24 repository IDs. The
+active factory `.beads` directory is `codex:codex` mode `0700`; its manifest is
+`codex:codex` mode `0600` after synchronization.
 
-## Preconditions
+This establishes one central store for supervised manual work. The live
+`/etc/software-factory/repositories.yaml` still describes the legacy layout,
+and no installed trusted host runner or fault-tested automation exists. Do not
+enable unattended claims until those remaining gates pass.
 
-1. The operator stops all legacy Beads writers and takes an exclusive migration
-   lock. Record each configured source identity, remote head, last successful
-   synchronization, issue count, and SHA-256 of an export. Preserve full Dolt
-   backups and the original databases under a private runtime recovery path.
-2. Prove that each local database matches its remote at the freeze point. If
-   evidence is insufficient, the operator repairs only the affected owner on
-   the inaccessible manifest and the Oracle compares local and remote state.
-   Never infer equality merely from a successful remote clone.
-3. Verify the central host runner is installed outside model write authority.
-   It runs as the dedicated non-root factory user outside the Codex sandbox,
-   accepts only fixed operations and trusted argument arrays, and validates
-   canonical path, database identity, symlinks, ownership, `0700` `.beads`
-   directory mode, `0600` manifest mode, and readability before and after each
-   operation. A failed postflight prevents remote publication.
-4. Provision one central `beads_sync` binding for the verified factory Dolt
-   remote. Repository Git, package, and GitOps bindings remain separate.
+## Import method and limits
 
-## Candidate and comparison
+The candidate began as a fresh clone of the factory Dolt remote, preserving its
+remote history. The other two stores supplied issue JSONL, preserving their
+issue IDs, fields, comments, timestamps, and dependencies. Their separate Dolt
+histories remain in their old remotes. `bd export` omits non-issue tables and
+memories by default; `bd export --all` can include sensitive memories. The
+manual migration did not merge non-issue tables or memories.
 
-1. Start from a verified full copy of the factory Dolt history. Never create an
-   empty substitute for an inaccessible source. Import issue JSONL from the
-   other verified stores without ID renaming, title deduplication, or stale
-   overwrite. Assign `metadata.repository_id` from trusted source registration;
-   set it to `software-factory` for existing factory issues. Keep the legacy
-   prefixes. `scripts/prepare_central_beads_import.py` validates private source
-   exports, duplicate IDs, routing conflicts, and dependency edges before
-   creating a private combined JSONL file. It does not change a Beads database
-   or solve the factory-base timestamp-tie behavior: existing factory issues
-   need an explicit metadata update in the candidate. Preserve every old remote
-   and full backup read-only.
-2. Compare source and candidate IDs, statuses, descriptions, acceptance
-   criteria, labels, comments, timestamps, and dependency edges. Only documented
-   routing metadata and the associated migration update time may differ. Check
-   dangling edges, active claims, ready/blocked sets, and every repository ID
-   against the allowlist. Inspect infrastructure records and memories before
-   deciding whether to migrate them; `bd export` omits Dolt history and
-   non-issue tables, while `bd export --all` can include sensitive memories.
-3. Repeat import in a disposable candidate and confirm it converges. A partial
-   import must never be exposed to task selection. Preserve source heads and
-   export hashes with the migration record.
+`scripts/prepare_central_beads_import.py` validates private exports, duplicate
+IDs, routing conflicts, and dependency edges before creating a private combined
+JSONL file. It does not alter a database. Existing factory issues needed an
+explicit metadata update in the candidate because Beads import retains local
+fields when `updated_at` ties. That update changed their timestamps. The three
+original remote histories remain available for audit. The accepted data-loss
+decision applies only to possible unsynchronized local changes from this
+cutover, not to future recovery.
 
-## Cutover and fault tests
+## Remaining gates for unattended operation
 
-Under the same lock, switch host registration and Oracle routing to one central
-store as a single versioned change. Reject mixed central and per-repository
-Beads routing. Disable writes and synchronization to old stores; retain them for
-audit. Validate one normal sync, claim, heartbeat, update, and close cycle using
-a dedicated test issue. Confirm `codex:codex` ownership and required modes after
-every step. Inject a wrong-owner manifest, symlink, wrong database identity,
-and attempted sandboxed write in disposable fixtures. Each must cause zero
-canonical mutation and no push. A failed test keeps claims disabled.
+1. Install a trusted host runner outside model write authority. It must run as
+   the dedicated non-root factory user outside Codex's sandbox, accept only
+   fixed operations and argument arrays, and pin the central database identity.
+   Check canonical path, symlinks, owner, `0700` directory mode, `0600`
+   manifest mode, and readability before and after every write. A failed
+   postflight prevents publication.
+2. Replace `/etc/software-factory/repositories.yaml` with a reviewed version 2
+   central Beads registration and one central `beads_sync` binding. Reject mixed
+   central and per-repository routing. Repository Git, package, and GitOps
+   credential bindings remain separate. The current version 1 host file must
+   not be used to select old task stores.
+3. Fault-test a wrong-owner manifest, symlink, wrong database identity, and an
+   attempted sandboxed write in disposable fixtures. Each must cause zero
+   canonical mutation and no push. Verify normal sync, claim, heartbeat,
+   update, and close retain the expected ownership and modes. Until then,
+   unattended scheduling remains disabled.
+4. Update product instructions that still direct agents to product-local
+   Beads. Reconcile merged task `et-2vx` in the central store. Its remote task
+   branch and worktree remain until the deterministic locked lifecycle procedure
+   verifies and cleans those exact resources.
 
-Reconcile `et-2vx` only after cutover, preserving its merge and branch lifecycle
-evidence. The merged task branch and worktree remain until the deterministic
-locked lifecycle procedure can verify and clean those exact resources. Create
-and deliver the Expense Tracker `llms.txt` task from the central store afterward.
-
-Rollback after any central write requires preserving and replaying that write;
-switching to stale legacy stores is not a valid rollback.
+Rollback after a central write must preserve and replay that write; switching
+to stale legacy stores is not a valid rollback.

@@ -2,10 +2,10 @@
 
 ## Placement
 
-The target source of truth is one Beads database in `software-factory` for
-factory, product, and deployment tasks. This is a migration from three legacy
-stores, not an additional copy: no claims resume until the gated cutover in
-[the migration runbook](central-beads-migration.md) is verified. Every task has
+The source of truth is one Beads database in `software-factory` for factory,
+product, and deployment tasks. The manual cutover from three legacy stores is
+recorded in [the migration runbook](central-beads-migration.md); unattended
+routing remains disabled until its remaining gates pass. Every task has
 `metadata.repository_id`, resolved against root-provisioned host registration.
 Existing `sf-*`, `et-*`, and `wk-*` IDs are retained; prefixes do not authorize
 access or select the repository. New tasks use the central database's `sf-*`
@@ -19,13 +19,15 @@ write `.beads`.
 
 The canonical central `.beads` directory and its embedded Dolt files are owned
 by the dedicated factory account. The top-level directory uses mode `0700` and
-the manifest uses `0600`. Only a trusted non-root host runner outside Codex's
-workspace sandbox may write it. The runner validates ownership, path, database
-identity, mode, and readability before and after each operation. An unexpected
-owner or unreadable manifest is a fail-closed host recovery condition. The
-factory process never uses `sudo`, weakens modes, deletes the manifest, or
-reconstructs the database from an older copy while the current database may
-still be recoverable.
+the manifest uses `0600`. Supervised manual Oracle operations run as the
+dedicated non-root account outside Codex's sandbox, with ownership checks
+before and after each write. Unattended operations require a trusted host
+runner outside model write authority. The runner validates ownership, path,
+database identity, mode, and readability before and after each operation. An
+unexpected owner or unreadable manifest is a fail-closed host recovery
+condition. The factory process never uses `sudo`, weakens modes, or deletes the
+manifest. It does not reconstruct the database from an older copy while the
+current database may still be recoverable.
 
 ## Required task information
 
@@ -82,10 +84,11 @@ checks:
 
 Any mismatch halts claims and remote writes. Store recovery copies under the
 factory runtime root, outside Git, before repairing database ownership or
-history. The `nobody:nogroup` ownership event has recurred in the factory and
-Expense Tracker stores; centralization alone is no cure. Unattended scheduling
-remains disabled until the runner enforces these checks and a repeatable fault
-test verifies the fail-closed path.
+history. The `nobody:nogroup` ownership event recurred in the legacy factory
+and Expense Tracker stores. The new central database retained `codex:codex`
+ownership after a supervised sync, but that alone does not prove recurrence is
+prevented. Unattended scheduling remains disabled until the runner enforces
+these checks and a repeatable fault test verifies the fail-closed path.
 
 ## Initial factory epic
 
