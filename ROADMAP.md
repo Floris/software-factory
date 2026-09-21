@@ -1,6 +1,6 @@
 # Roadmap
 
-Status reviewed on 2026-09-20 against the VPS, repository state, Beads state,
+Status reviewed on 2026-09-21 against the VPS, repository state, Beads state,
 Git history, and host configuration. Checked items are verified complete.
 Unchecked items remain delivery work; their `Current` note records implemented
 foundations without treating them as an operational capability.
@@ -30,19 +30,18 @@ foundations without treating them as an operational capability.
     multi-repository execution remains disabled while an account-wide
     bootstrap credential is usable or any required `credential_refs` entry is
     absent.
-- [x] Initialize canonical Beads databases and remotes.
-  - Evidence: `software-factory`, `expense-tracker`, and `website-k8s` each
-    completed a Dolt pull/check/push cycle. Their embedded databases are owned
-    by the non-root factory account and their top-level `.beads` directories
-    use mode `0700`.
-  - Current: the tracked host-configuration example now records the verified
-    contract and required Dolt remote fields with neutral placeholders.
-    Refresh the root-provisioned host copy with reviewed repository-specific
-    values before unattended execution.
+- [ ] Cut over to one central Beads database and remote.
+  - Current: the three legacy remotes can be cloned read-only and contain 24
+    unique tasks. A disposable central candidate imported all 24 with
+    repository routing metadata and retained `codex:codex` manifest ownership.
+    This does not prove the inaccessible local factory and Expense Tracker
+    databases have no unsynchronized changes: their manifests are currently
+    `nobody:nogroup`. The host configuration and trusted runner have not been
+    switched. Follow the gated migration runbook before any new claim.
 - [ ] Register and preflight every opted-in product repository.
   - Current: the tracked contract supports one-to-many components, OCI package
     identities, and GitOps application mappings. Root-owned host registration,
-    exact remote/default-branch verification, per-repository Beads
+    exact remote/default-branch verification, central Beads
     synchronization, operation-keyed credential references, and credential
     audience checks remain operator work for each repository.
 
@@ -117,7 +116,10 @@ foundations without treating them as an operational capability.
 
 ## Next milestone
 
-Close the remaining repeatability gaps in the manual runner: install a durable
+Reconcile the inaccessible legacy Beads databases and cut over to the central
+store through the trusted non-root runner. Fault-test ownership and sandbox
+isolation before resuming claims. Then close the remaining repeatability gaps
+in the manual runner: install a durable
 trusted Node.js runtime, record one structured worker result, and execute the
 configured validation profile from orchestration rather than an ad hoc shell.
 Implement and fault-test the canonical Beads ownership/mode preflight and

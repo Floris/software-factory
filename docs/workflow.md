@@ -14,9 +14,9 @@ auto-discovery:
    configuration. A mismatch or ambiguous repository identity blocks.
 3. The product repository adds repository-specific `AGENTS.md` instructions
    that preserve its invariants and factory boundaries.
-4. The Oracle initializes that repository's own canonical Beads database,
-   configures its own Dolt remote from trusted host configuration, performs the
-   ownership/mode/readability preflight, and proves a pull/check/push cycle.
+4. The Oracle verifies that the central Beads database is synchronized and
+   readable through the trusted host runner. The registered repository ID can
+   then be assigned to its tasks. No product Beads database is initialized.
 5. The repository adds bounded validation that is safe on untrusted source.
    Host configuration represents each invocation as an executable followed by
    an argument array; no command comes from a Bead or is passed to a shell.
@@ -48,7 +48,8 @@ before use:
 
 - source fetch uses `git_read`; branch push and pull-request mutation use
   `git_write` for that exact source repository;
-- canonical task-state pull/push uses `beads_sync` for that exact Beads remote;
+- canonical task-state pull/push uses the one top-level `beads_sync` binding
+  for the central Beads remote;
 - GHCR image verification uses `package_read` constrained to that product's
   declared GHCR package set; and
 - GitOps observation and GitOps branch/pull-request mutation use `gitops_read`
@@ -74,8 +75,9 @@ or deployment delivery waits for the component/package mapping migration.
 
 ## Task intake
 
-A human or approved planning process creates a Bead in the repository that owns
-the work. The task must state:
+A human or approved planning process creates a Bead in the central factory
+store. Its `metadata.repository_id` must identify exactly one registered
+repository. The task must state:
 
 - the desired outcome and acceptance criteria;
 - dependencies and affected repository;
@@ -87,7 +89,7 @@ the work. The task must state:
 
 ## Implementation
 
-1. The Oracle pulls the repository and Beads state.
+1. The Oracle pulls the selected repository and central Beads state.
 2. List ready work and select exactly one task.
 3. Claim the task through the Oracle.
 4. The Oracle creates `codex/<bead-id>-<slug>` in a dedicated worktree.

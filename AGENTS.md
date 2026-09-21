@@ -33,7 +33,10 @@ Kubernetes manifests.
 ## Beads workflow
 
 The root orchestrator is the Oracle. It owns planning, claims, Beads state,
-delegation, integration, and final verification.
+delegation, integration, and final verification. The intended task source is
+one central Beads database in this repository; every task carries a validated
+`repository_id`. The [migration runbook](docs/central-beads-migration.md) gates
+the cutover. Do not claim from either layout until that gate passes.
 
 1. Synchronize Beads and inspect ready work.
 2. Claim exactly one implementation task.
@@ -88,8 +91,10 @@ Oracle selects the configured product and Bead, creates or chooses the task
 worktree, and delegates there. Humans do not normally start a separate root
 Codex session from a canonical product checkout.
 
-Factory-development tasks live in this repository. Product tasks live with
-their product. Deployment tasks live in `website-k8s`. Cross-repository work
+Factory, product, and deployment task records live in the central Beads store
+after cutover. Product code remains in its product repository, and Kubernetes
+desired state remains in `website-k8s`. A task's `repository_id` selects the
+registered source repository; its ID prefix does not. Cross-repository work
 links the relevant Bead IDs instead of copying the task.
 
 ## Current implementation phase

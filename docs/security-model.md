@@ -43,16 +43,17 @@
   minimum contents/pull-request permissions. Where deploy keys or fine-grained
   tokens are used, scope them to one repository and separate read-only access
   from branch-push access when the provider permits it.
-- Dolt/Beads remote access is repository-scoped and available only to the
-  trusted Oracle. Product source push access does not imply access to another
-  product's Beads remote.
+- The one central Dolt/Beads remote is available only to the trusted Oracle
+  runner through its own `beads_sync` binding. Product source push access does
+  not imply central task-state access.
 - GHCR/OCI package publication belongs exclusively to repository CI. Its
   publish job uses the GitHub Actions `GITHUB_TOKEN`, with `packages: write`
   limited to that job and the declared package repositories; all other jobs
   retain `contents: read`. CI cannot read root-owned host registration, and the
   VPS credential provider cannot issue registry-push credentials.
 - `git_read`, `git_write`, `beads_sync`, `package_read`, `gitops_read`, and
-  `gitops_write` are distinct VPS authorization operations. The provider
+  `gitops_write` are distinct VPS authorization operations. `beads_sync` is
+  bound once at the top level; the provider
   response must identify the exact normalized repository, Beads remote, or
   declared package set and permit the requested operation; the Oracle compares
   that audience with trusted registration before use. There is intentionally
@@ -73,19 +74,26 @@
 
 ### Beads state
 
-- Canonical Beads databases and Dolt manifests are owned by the dedicated
-  factory user; each repository's top-level `.beads` directory uses mode
-  `0700`.
-- Dolt remote URLs come only from root-provisioned host configuration and use
-  the factory's approved repository-scoped Git transport. They are not added
-  to tracked product `.beads` configuration. Beads state is not copied into
-  product code or a central aggregate database.
+- The one canonical Beads database and its Dolt manifest are owned by the
+  dedicated factory user. Its top-level `.beads` directory uses mode `0700`
+  and its manifest `0600`.
+- The central Dolt remote URL comes only from root-provisioned host
+  configuration and uses the factory's approved Git transport. It is not
+  added to tracked product `.beads` configuration. Legacy product stores are
+  retained read-only for audit after the gated migration.
 - Workers receive Bead contents as untrusted, read-only input. Only the Oracle
   mutates or synchronizes canonical Beads state, and worker identities receive
   neither canonical Beads write access nor its remote-push credentials.
-- Unexpected ownership or an unreadable database halts claims. Host-level
-  ownership repair is an explicit operator recovery action, not a permission
-  held by the factory service.
+- The runner executes fixed Beads operations as the dedicated non-root account
+  outside Codex's workspace sandbox. It pins the canonical database identity
+  and validates path, symlinks, owner, directory and manifest modes, and
+  readability before and after every write. It does not accept caller-supplied
+  database paths or arbitrary commands. Unexpected ownership or an unreadable
+  database halts claims and publication. Host-level ownership repair is an
+  explicit operator recovery action, not a permission held by the service.
+- Moving to one store does not by itself repair the recurring `nobody:nogroup`
+  manifest fault. The migration requires a real wrong-owner fault test and a
+  normal operation test before any central claim.
 
 ### Kubernetes observer
 
