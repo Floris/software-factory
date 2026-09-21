@@ -124,10 +124,10 @@ belong to the Oracle.
 
 The example policies intentionally combine `git.delete_branch: false` with
 `lifecycle.delete_merged_remote_branch: true`. The first keeps deletion out of
-delegated and model-controlled Git actions. The second grants only the trusted
-Oracle runner permission to perform the locked, durable, exact merged remote
-task-ref deletion defined by the lifecycle workflow; it never authorizes a
-model-produced command.
+delegated Git actions. The second grants only the root Oracle permission to
+perform the locked, durable, exact merged task-ref lifecycle operation. The
+[supervised runbook](docs/supervised-lifecycle.md) uses the existing GitHub
+connector and SSH without a new host service or GitHub token.
 
 Machine-local Codex state remains in `/home/codex/.codex/` on the VPS. Project
 trust records, TUI state, authentication files, and tokens must never be copied
@@ -148,6 +148,7 @@ codex
 - [Roadmap](ROADMAP.md)
 - [Why this is a separate repository](docs/decisions/0001-separate-control-repository.md)
 - [Why tasks move to one store](docs/decisions/0002-central-beads-task-store.md)
+- [Supervised lifecycle decision](docs/decisions/0003-supervised-branch-lifecycle.md)
 
 ## VPS bootstrap boundary
 
@@ -162,5 +163,6 @@ the first implementation task will:
    mappings;
 6. implement a manually invoked, single-task runner before any timer or daemon.
 
-The first manually invoked task-branch lifecycle implementation and its live
-installation gates are documented in [the lifecycle runner guide](docs/lifecycle-runner.md).
+The branch lifecycle modes are documented in [the lifecycle runner
+guide](docs/lifecycle-runner.md) and [the supervised
+runbook](docs/supervised-lifecycle.md).

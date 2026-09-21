@@ -3,10 +3,12 @@
 `scripts/merged_branch_lifecycle.py` is a manually invoked, single-task runner.
 It deletes only a merged `codex/<task-id>-*` remote task ref, then removes that
 task's dedicated local worktree and branch after the Oracle verifies delivery.
-The runner is source code in this repository; it is **not** trusted while it is
-executed from a checkout that Codex can write.
+The supervised Oracle mode runs the reviewed file from the clean canonical
+factory `main` checkout and uses the GitHub connector. Its checks, evidence
+format, and one-time host change are in [the supervised runbook](supervised-lifecycle.md).
+The installed mode below remains available for unattended operation.
 
-## Installation gate
+## Unattended installation gate
 
 An operator must review and install the script at
 `/usr/local/lib/software-factory/merged_branch_lifecycle.py`, owned by root and
@@ -19,12 +21,11 @@ read access; the token is never written to the lifecycle record or passed on a
 command line. The launcher also uses the registered Git write identity for the
 exact repository. Do not run the source-tree copy against live refs.
 
-The runner requires root-owned registration version 2 and a selected root-owned
+The installed runner requires root-owned registration version 2 and a selected root-owned
 policy with both `git.delete_branch: false` and
-`lifecycle.delete_merged_remote_branch: true`. The current live host files are
-still version 1 and have no lifecycle key; the runner correctly blocks there.
-Updating those files and wiring the credential provider are separate operator
-steps. This script must not be installed or scheduled until the normal worker
+`lifecycle.delete_merged_remote_branch: true`. Updating those files and wiring
+the credential provider are separate operator steps. The installed runner must
+not be scheduled until the normal worker
 launcher participates in the same lock: each worker/reviewer/factory run
 against a dedicated task worktree takes a shared `flock` on
 `/var/lib/software-factory/lifecycle/<repository-id>/<task-id>.lock` for its
@@ -39,8 +40,7 @@ The fixed argument vectors are:
 ["python3", "/usr/local/lib/software-factory/merged_branch_lifecycle.py", "local-cleanup", "<task-id>", "<repository-id>", "<merged-pr-number>", "--delivery-evidence", "<Oracle verification summary>"]
 ```
 
-The Oracle supplies identifiers and delivery evidence; it never supplies a
-branch-deletion command or a path. The runner resolves paths and policy from
+The Oracle supplies identifiers and delivery evidence. The installed runner resolves paths and policy from
 root-owned configuration, fetches the pull request and branch protection state
 from GitHub, proves the exact task head is a parent of the merge commit and an
 ancestor of the refreshed default ref, and rejects moved or shared refs. Before

@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from contextlib import contextmanager, ExitStack
+from datetime import datetime, timedelta, timezone
 import importlib.util
+import json
 from pathlib import Path
 import subprocess
 import tempfile
@@ -71,6 +73,29 @@ class LifecycleTests(unittest.TestCase):
         if endpoint.startswith("branches/"):
             return {"protected": False}
         raise AssertionError(endpoint)
+
+    def connector_evidence(self) -> dict:
+        return {
+            "version": 1, "repo": "Floris/demo", "task_id": self.task,
+            "repository_id": self.repository_id, "pr_number": 7,
+            "observed_at": datetime.now(timezone.utc).isoformat(),
+            "pull_request": {
+                "number": 7, "state": "closed", "merged": True,
+                "head": f"codex/{self.task}-work", "head_sha": self.head,
+                "head_repo_full_name": "Floris/demo", "base": "main",
+                "merge_commit_sha": self.merge,
+            },
+            "default_branch": "main", "open_pull_requests": [],
+            "protection_gate": "github_server_enforced",
+        }
+
+    def write_evidence(self, evidence: dict) -> Path:
+        directory = self.root / "connector-evidence"
+        directory.mkdir(mode=0o700, exist_ok=True)
+        path = directory / "sf-test.json"
+        path.write_text(json.dumps(evidence))
+        path.chmod(0o600)
+        return path
 
     @contextmanager
     def patches(self):
@@ -172,6 +197,49 @@ class LifecycleTests(unittest.TestCase):
             with self.assertRaisesRegex(lifecycle.Blocked, "policy denied"):
                 lifecycle.process(self.task, self.repository_id, 7)
         self.assertEqual(lifecycle.remote_sha(self.repo, "refs/heads/codex/sf-test-work"), self.head)
+
+    def test_supervised_connector_evidence_runs_exact_merge_checks(self) -> None:
+        path = self.write_evidence(self.connector_evidence())
+        with patch.object(lifecycle, "EVIDENCE_ROOT", path.parent):
+            evidence = lifecycle.load_supervised_evidence(path, self.task, self.repository_id, 7)
+        with self.patches(), patch.object(lifecycle, "SUPERVISED_EVIDENCE", evidence):
+            result = lifecycle.process(self.task, self.repository_id, 7)
+        self.assertEqual(result["remote_delete"], "completed")
+        self.assertIsNone(lifecycle.remote_sha(self.repo, "refs/heads/codex/sf-test-work"))
+
+    def test_supervised_evidence_rejects_stale_and_shared_head(self) -> None:
+        evidence = self.connector_evidence()
+        evidence["observed_at"] = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+        path = self.write_evidence(evidence)
+        with patch.object(lifecycle, "EVIDENCE_ROOT", path.parent):
+            with self.assertRaisesRegex(lifecycle.Blocked, "stale"):
+                lifecycle.load_supervised_evidence(path, self.task, self.repository_id, 7)
+            evidence["observed_at"] = datetime.now(timezone.utc).isoformat()
+            evidence["open_pull_requests"] = [{"number": 8}]
+            path = self.write_evidence(evidence)
+            with self.assertRaisesRegex(lifecycle.Blocked, "unshared"):
+                lifecycle.load_supervised_evidence(path, self.task, self.repository_id, 7)
+
+    def test_supervised_evidence_rejects_wrong_identity_and_permissions(self) -> None:
+        evidence = self.connector_evidence()
+        evidence["pull_request"]["head_sha"] = "0" * 40
+        path = self.write_evidence(evidence)
+        with patch.object(lifecycle, "EVIDENCE_ROOT", path.parent):
+            with self.assertRaisesRegex(lifecycle.Blocked, "private"):
+                path.chmod(0o644)
+                lifecycle.load_supervised_evidence(path, self.task, self.repository_id, 7)
+            path.chmod(0o600)
+            with self.assertRaisesRegex(lifecycle.Blocked, "task identity"):
+                lifecycle.load_supervised_evidence(path, self.task, self.repository_id, 8)
+            with ExitStack() as stack:
+                stack.enter_context(patch.object(lifecycle, "SUPERVISED_EVIDENCE", lifecycle.load_supervised_evidence(
+                    path, self.task, self.repository_id, 7)))
+                stack.enter_context(patch.object(lifecycle, "STATE_ROOT", self.state_root))
+                stack.enter_context(patch.object(lifecycle, "repository_config",
+                                                 return_value=(self.registration, self.entry, {})))
+                stack.enter_context(patch.object(lifecycle, "github_name", return_value="Floris/demo"))
+                with self.assertRaisesRegex(lifecycle.Blocked, "local task branch moved"):
+                    lifecycle.process(self.task, self.repository_id, 7)
 
 
 if __name__ == "__main__":

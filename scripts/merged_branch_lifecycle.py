@@ -1,19 +1,21 @@
 #!/usr/bin/env python3
 """Trusted, single-task Git branch lifecycle runner.
 
-Install this file outside model-writable paths before using it against live
-repositories. The host launcher supplies a repository-scoped GitHub read token
-as SF_GITHUB_TOKEN. Repository and policy paths are fixed root-owned inputs.
+The unattended mode requires a root-owned installation and a GitHub read token.
+The supervised Oracle mode accepts short-lived connector evidence and runs from
+the reviewed checkout. Repository and policy paths remain root-owned inputs.
 """
 
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timezone
 import fcntl
 import json
 import os
 from pathlib import Path
 import re
+import stat
 import subprocess
 import sys
 import tempfile
@@ -26,6 +28,9 @@ import yaml
 REGISTRATION = Path("/etc/software-factory/repositories.yaml")
 POLICIES = Path("/etc/software-factory/policies.yaml")
 STATE_ROOT = Path("/var/lib/software-factory/lifecycle")
+SUPERVISED_ROOT = Path("/srv/software-factory/runtime/lifecycle")
+EVIDENCE_ROOT = Path("/srv/software-factory/runtime/lifecycle-evidence")
+SUPERVISED_EVIDENCE: dict | None = None
 GIT = "/usr/bin/git"
 TASK_ID = re.compile(r"[a-z][a-z0-9-]{1,31}(?:\.[0-9]{1,3})?")
 REPOSITORY_ID = re.compile(r"[a-z][a-z0-9-]{1,31}")
@@ -112,6 +117,24 @@ def github_name(remote: str) -> str:
 
 
 def github_data(repo: str, endpoint: str) -> object:
+    if SUPERVISED_EVIDENCE is not None:
+        evidence = SUPERVISED_EVIDENCE
+        if repo != evidence["repo"]:
+            raise Blocked("connector evidence repository mismatch")
+        if endpoint == f"pulls/{evidence['pr_number']}":
+            pr = evidence["pull_request"]
+            return {"state": pr["state"], "merged": pr["merged"],
+                    "merge_commit_sha": pr["merge_commit_sha"],
+                    "head": {"ref": pr["head"], "sha": pr["head_sha"],
+                             "repo": {"full_name": pr["head_repo_full_name"]}},
+                    "base": {"ref": pr["base"]}}
+        if endpoint == "":
+            return {"default_branch": evidence["default_branch"]}
+        owner = repo.split("/", 1)[0]
+        branch = evidence["pull_request"]["head"]
+        if endpoint == f"pulls?state=open&head={quote(f'{owner}:{branch}', safe='')}&per_page=100":
+            return evidence["open_pull_requests"]
+        raise Blocked("connector evidence does not cover GitHub query")
     token = os.environ.get("SF_GITHUB_TOKEN", "")
     if not token:
         raise Blocked("trusted launcher did not supply GitHub read credentials")
@@ -126,6 +149,50 @@ def github_data(repo: str, endpoint: str) -> object:
     except Exception as exc:
         raise Blocked("GitHub identity or protection query failed") from exc
     return result
+
+
+def load_supervised_evidence(path: Path, task_id: str, repository_id: str, pr_number: int) -> dict:
+    if path.parent != EVIDENCE_ROOT or path.is_symlink():
+        raise Blocked("connector evidence must be in the fixed runtime directory")
+    root = EVIDENCE_ROOT.lstat()
+    if not stat.S_ISDIR(root.st_mode) or root.st_uid != os.getuid() or root.st_mode & 0o077:
+        raise Blocked("connector evidence directory must be private")
+    st = path.lstat()
+    if not stat.S_ISREG(st.st_mode) or st.st_uid != os.getuid() or st.st_mode & 0o077 or st.st_size > 16384:
+        raise Blocked("connector evidence file must be private and bounded")
+    evidence = json.loads(path.read_text())
+    required = {"version", "repo", "task_id", "repository_id", "pr_number", "observed_at",
+                "pull_request", "default_branch", "open_pull_requests", "protection_gate"}
+    if not isinstance(evidence, dict) or set(evidence) != required:
+        raise Blocked("invalid connector evidence schema")
+    if evidence["version"] != 1 or (evidence["task_id"], evidence["repository_id"], evidence["pr_number"]) != (task_id, repository_id, pr_number):
+        raise Blocked("connector evidence task identity mismatch")
+    if not isinstance(evidence["repo"], str) or not REPO.fullmatch(evidence["repo"]):
+        raise Blocked("invalid connector evidence repository")
+    if not isinstance(evidence["default_branch"], str) or not isinstance(evidence["open_pull_requests"], list):
+        raise Blocked("invalid connector evidence repository facts")
+    if evidence["protection_gate"] != "github_server_enforced":
+        raise Blocked("supervised protection gate must be explicit")
+    pr = evidence["pull_request"]
+    pr_fields = {"number", "state", "merged", "head", "head_sha", "head_repo_full_name", "base", "merge_commit_sha"}
+    if not isinstance(pr, dict) or set(pr) != pr_fields or pr["number"] != pr_number:
+        raise Blocked("invalid connector pull request evidence")
+    if pr["head_repo_full_name"] != evidence["repo"] or pr["base"] != evidence["default_branch"]:
+        raise Blocked("connector pull request repository or base mismatch")
+    if not isinstance(pr["head"], str) or not pr["head"].startswith(f"codex/{task_id.replace('.', '-')}-"):
+        raise Blocked("connector pull request task branch mismatch")
+    if not all(isinstance(pr[key], str) and SHA.fullmatch(pr[key]) for key in ("head_sha", "merge_commit_sha")):
+        raise Blocked("invalid connector commit identities")
+    if pr["state"] != "closed" or pr["merged"] is not True or evidence["open_pull_requests"]:
+        raise Blocked("connector evidence does not prove an unshared merged PR")
+    try:
+        seen = datetime.fromisoformat(evidence["observed_at"].replace("Z", "+00:00"))
+        age = (datetime.now(timezone.utc) - seen).total_seconds()
+    except (AttributeError, TypeError, ValueError) as exc:
+        raise Blocked("invalid connector evidence timestamp") from exc
+    if seen.tzinfo is None or age < -30 or age > 900:
+        raise Blocked("connector evidence is stale or in the future")
+    return evidence
 
 
 def github_json(repo: str, endpoint: str) -> dict:
@@ -199,9 +266,10 @@ def verify(
     if task_sha is not None and task_sha != state["head"]:
         raise Blocked("task remote ref moved")
     if task_sha is not None:
-        branch_info = github_json(repo, f"branches/{quote(state['branch'], safe='')}")
-        if branch_info.get("protected") is not False:
-            raise Blocked("task branch is protected or protection is unknown")
+        if SUPERVISED_EVIDENCE is None:
+            branch_info = github_json(repo, f"branches/{quote(state['branch'], safe='')}")
+            if branch_info.get("protected") is not False:
+                raise Blocked("task branch is protected or protection is unknown")
         owner = repo.split("/", 1)[0]
         head_filter = quote(f"{owner}:{state['branch']}", safe="")
         if github_list(repo, f"pulls?state=open&head={head_filter}&per_page=100"):
@@ -419,14 +487,30 @@ def main() -> int:
     parser.add_argument("repository_id")
     parser.add_argument("pr_number", type=int)
     parser.add_argument("--delivery-evidence")
+    parser.add_argument("--supervised-evidence", type=Path)
     args = parser.parse_args()
     try:
-        installed = Path(__file__).resolve()
-        trusted_root = Path("/usr/local/lib/software-factory")
-        if (installed.parent != trusted_root or installed.is_symlink() or installed.stat().st_uid != 0
-                or installed.stat().st_mode & 0o022 or trusted_root.is_symlink()
-                or trusted_root.stat().st_uid != 0 or trusted_root.stat().st_mode & 0o022):
-            raise Blocked("runner must be installed root-owned outside model-writable paths")
+        if args.supervised_evidence is not None:
+            global SUPERVISED_EVIDENCE, STATE_ROOT
+            source = Path(__file__).absolute()
+            canonical_source = Path("/srv/software-factory/repos/software-factory/scripts/merged_branch_lifecycle.py")
+            if source != canonical_source or source.is_symlink() or source.parent.is_symlink():
+                raise Blocked("supervised runner must use the canonical factory checkout")
+            factory = canonical_source.parents[1]
+            if run(["git", "symbolic-ref", "--quiet", "--short", "HEAD"], factory).stdout.strip() != "main":
+                raise Blocked("supervised runner requires factory main")
+            if run(["git", "status", "--porcelain", "--", "scripts/merged_branch_lifecycle.py"], factory).stdout:
+                raise Blocked("supervised runner source is modified")
+            SUPERVISED_EVIDENCE = load_supervised_evidence(
+                args.supervised_evidence, args.task_id, args.repository_id, args.pr_number)
+            STATE_ROOT = SUPERVISED_ROOT
+        else:
+            installed = Path(__file__).resolve()
+            trusted_root = Path("/usr/local/lib/software-factory")
+            if (installed.parent != trusted_root or installed.is_symlink() or installed.stat().st_uid != 0
+                    or installed.stat().st_mode & 0o022 or trusted_root.is_symlink()
+                    or trusted_root.stat().st_uid != 0 or trusted_root.stat().st_mode & 0o022):
+                raise Blocked("runner must be installed root-owned outside model-writable paths")
         if args.phase == "remote-delete":
             if args.delivery_evidence is not None:
                 raise Blocked("delivery evidence belongs only to local cleanup")
