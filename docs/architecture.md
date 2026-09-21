@@ -179,8 +179,8 @@ performs another mutation.
 The lifecycle has two Oracle-owned, independently locked phases. The following
 describes the full unattended lock and protection-query design. Supervised
 sessions use the bounded exception in [the runbook](supervised-lifecycle.md):
-the Oracle checks inactivity directly, the connector supplies PR facts, and
-GitHub enforces protection on the SSH push.
+the Oracle checks inactivity directly and attests fresh PR, repository, and
+branch-protection facts from the GitHub connector.
 
 Immediately
 after GitHub reports a successful true merge, the merge-time phase deletes the

@@ -23,9 +23,9 @@ private durable runtime state. `git.delete_branch: false` continues to deny
 delegated branch deletion; `lifecycle.delete_merged_remote_branch: true`
 authorizes only this bounded Oracle operation.
 
-The connector exposes PR and repository facts but does not expose the branch
-protection flag. In supervised mode GitHub's SSH push is the protection gate.
-The Oracle checks that no other task agent is active because legacy worktrees
+The Oracle uses the connector's authenticated branch API fetch to attest the
+exact branch SHA and `protected: false` before remote deletion. It checks that
+no other task agent is active because legacy worktrees
 do not yet participate in shared locks. The installed runner remains the
 stronger unattended option when its credential and launcher are available.
 
@@ -35,6 +35,6 @@ stronger unattended option when its credential and launcher are available.
   or new service is required for supervised cleanup.
 - Connector evidence is an Oracle attestation, not independently authenticated
   input to the runner. Ambiguous PR, repository, activity, or ref state blocks.
-- The supervised mode must not be used where the SSH identity can bypass a
-  protected-branch deletion rule. Its exact scope and recovery steps are in
+- The supervised mode still relies on the Oracle's faithful transcription of
+  connector results. Its exact scope and recovery steps are in
   [the runbook](../supervised-lifecycle.md).

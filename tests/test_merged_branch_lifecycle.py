@@ -71,7 +71,7 @@ class LifecycleTests(unittest.TestCase):
         if endpoint == "":
             return {"default_branch": "main"}
         if endpoint.startswith("branches/"):
-            return {"protected": False}
+            return {"protected": False, "commit": {"sha": self.head}}
         raise AssertionError(endpoint)
 
     def connector_evidence(self) -> dict:
@@ -86,7 +86,8 @@ class LifecycleTests(unittest.TestCase):
                 "merge_commit_sha": self.merge,
             },
             "default_branch": "main", "open_pull_requests": [],
-            "protection_gate": "github_server_enforced",
+            "branch_info": {"name": f"codex/{self.task}-work", "sha": self.head,
+                            "protected": False},
         }
 
     def write_evidence(self, evidence: dict) -> Path:
@@ -202,7 +203,12 @@ class LifecycleTests(unittest.TestCase):
         path = self.write_evidence(self.connector_evidence())
         with patch.object(lifecycle, "EVIDENCE_ROOT", path.parent):
             evidence = lifecycle.load_supervised_evidence(path, self.task, self.repository_id, 7)
-        with self.patches(), patch.object(lifecycle, "SUPERVISED_EVIDENCE", evidence):
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(lifecycle, "SUPERVISED_EVIDENCE", evidence))
+            stack.enter_context(patch.object(lifecycle, "STATE_ROOT", self.state_root))
+            stack.enter_context(patch.object(lifecycle, "repository_config",
+                                             return_value=(self.registration, self.entry, {})))
+            stack.enter_context(patch.object(lifecycle, "github_name", return_value="Floris/demo"))
             result = lifecycle.process(self.task, self.repository_id, 7)
         self.assertEqual(result["remote_delete"], "completed")
         self.assertIsNone(lifecycle.remote_sha(self.repo, "refs/heads/codex/sf-test-work"))
@@ -240,6 +246,7 @@ class LifecycleTests(unittest.TestCase):
     def test_supervised_evidence_rejects_wrong_identity_and_permissions(self) -> None:
         evidence = self.connector_evidence()
         evidence["pull_request"]["head_sha"] = "0" * 40
+        evidence["branch_info"]["sha"] = "0" * 40
         path = self.write_evidence(evidence)
         with patch.object(lifecycle, "EVIDENCE_ROOT", path.parent):
             with self.assertRaisesRegex(lifecycle.Blocked, "private"):
@@ -257,6 +264,15 @@ class LifecycleTests(unittest.TestCase):
                 stack.enter_context(patch.object(lifecycle, "github_name", return_value="Floris/demo"))
                 with self.assertRaisesRegex(lifecycle.Blocked, "local task branch moved"):
                     lifecycle.process(self.task, self.repository_id, 7)
+
+    def test_supervised_evidence_rejects_protected_branch(self) -> None:
+        evidence = self.connector_evidence()
+        evidence["branch_info"]["protected"] = True
+        path = self.write_evidence(evidence)
+        with patch.object(lifecycle, "EVIDENCE_ROOT", path.parent):
+            with self.assertRaisesRegex(lifecycle.Blocked, "protected"):
+                lifecycle.load_supervised_evidence(path, self.task, self.repository_id, 7)
+        self.assertEqual(lifecycle.remote_sha(self.repo, "refs/heads/codex/sf-test-work"), self.head)
 
 
 if __name__ == "__main__":

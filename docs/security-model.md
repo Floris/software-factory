@@ -139,9 +139,9 @@
 Attended Oracle sessions may use the [supervised lifecycle
 procedure](supervised-lifecycle.md) from clean factory `main` after the
 root-owned lifecycle policy is enabled. The Oracle attests fresh GitHub
-connector facts in a private short-lived file, while the runner checks exact
-Git refs and merge ancestry and uses a SHA-bound lease. GitHub enforces branch
-protection at push time. This mode trusts the root Oracle's evidence and its
+connector facts in a private short-lived file, including the exact branch SHA
+and `protected: false`. The runner checks exact Git refs and merge ancestry
+and uses a SHA-bound lease. This mode trusts the root Oracle's evidence and its
 direct observation that no task agent is active; existing manual worktrees do
 not participate in a shared lock. It therefore has a narrower trust boundary
 than unattended operation. Any uncertainty blocks the task.

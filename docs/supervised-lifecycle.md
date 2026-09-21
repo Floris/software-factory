@@ -29,14 +29,10 @@ missing lifecycle flag and any non-root-owned or writable host policy.
 ## Evidence and execution
 
 For **each** invocation the Oracle obtains fresh facts using the authenticated
-GitHub connector: the exact merged PR, repository default branch, and an
-exact-head search for open PRs. The connector's branch search does not expose
-the protection flag. The supervised mode therefore records
-`protection_gate: github_server_enforced` and relies on GitHub to reject a
-protected-branch delete at push time. This is a deliberate, narrower assurance
-than the installed runner's authenticated branch-protection query. If a branch
-rule can be bypassed by the SSH identity, the Oracle must not use supervised
-mode for that repository.
+GitHub connector: the exact merged PR, repository default branch, an
+exact-head search for open PRs, and the exact branch API response through the
+connector's `fetch` capability. The branch response must report the PR head
+SHA and `protected: false`; an unavailable branch query blocks remote deletion.
 
 The Oracle writes a private `0600` JSON file in the evidence directory. It is
 an Oracle attestation of connector results, not a credential or a claim that
@@ -62,11 +58,17 @@ the local runner independently queried GitHub. Its exact schema is:
   },
   "default_branch": "main",
   "open_pull_requests": [],
-  "protection_gate": "github_server_enforced"
+  "branch_info": {
+    "name": "codex/sf-example-task",
+    "sha": "0000000000000000000000000000000000000000",
+    "protected": false
+  }
 }
 ```
 
-The runner accepts only this schema, the exact requested task/PR/repository,
+For local cleanup after completed remote deletion, `branch_info` is `null`:
+the remote branch must already be absent. The runner accepts only this schema,
+the exact requested task/PR/repository,
 and evidence no older than 15 minutes. It checks the registered Git remote,
 clean canonical checkout and exact dedicated worktree, live default and task
 refs, PR head and merge identity, true merge second parent, and ancestry. It

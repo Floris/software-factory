@@ -132,6 +132,10 @@ def github_data(repo: str, endpoint: str) -> object:
             return {"default_branch": evidence["default_branch"]}
         owner = repo.split("/", 1)[0]
         branch = evidence["pull_request"]["head"]
+        if endpoint == f"branches/{quote(branch, safe='')}":
+            if evidence["branch_info"] is None:
+                raise Blocked("connector branch evidence is missing")
+            return evidence["branch_info"]
         if endpoint == f"pulls?state=open&head={quote(f'{owner}:{branch}', safe='')}&per_page=100":
             return evidence["open_pull_requests"]
         raise Blocked("connector evidence does not cover GitHub query")
@@ -162,7 +166,7 @@ def load_supervised_evidence(path: Path, task_id: str, repository_id: str, pr_nu
         raise Blocked("connector evidence file must be private and bounded")
     evidence = json.loads(path.read_text())
     required = {"version", "repo", "task_id", "repository_id", "pr_number", "observed_at",
-                "pull_request", "default_branch", "open_pull_requests", "protection_gate"}
+                "pull_request", "default_branch", "open_pull_requests", "branch_info"}
     if not isinstance(evidence, dict) or set(evidence) != required:
         raise Blocked("invalid connector evidence schema")
     if evidence["version"] != 1 or (evidence["task_id"], evidence["repository_id"], evidence["pr_number"]) != (task_id, repository_id, pr_number):
@@ -171,8 +175,6 @@ def load_supervised_evidence(path: Path, task_id: str, repository_id: str, pr_nu
         raise Blocked("invalid connector evidence repository")
     if not isinstance(evidence["default_branch"], str) or not isinstance(evidence["open_pull_requests"], list):
         raise Blocked("invalid connector evidence repository facts")
-    if evidence["protection_gate"] != "github_server_enforced":
-        raise Blocked("supervised protection gate must be explicit")
     pr = evidence["pull_request"]
     pr_fields = {"number", "state", "merged", "head", "head_sha", "head_repo_full_name", "base", "merge_commit_sha"}
     if not isinstance(pr, dict) or set(pr) != pr_fields or pr["number"] != pr_number:
@@ -183,6 +185,12 @@ def load_supervised_evidence(path: Path, task_id: str, repository_id: str, pr_nu
         raise Blocked("connector pull request task branch mismatch")
     if not all(isinstance(pr[key], str) and SHA.fullmatch(pr[key]) for key in ("head_sha", "merge_commit_sha")):
         raise Blocked("invalid connector commit identities")
+    branch_info = evidence["branch_info"]
+    if branch_info is not None:
+        if (not isinstance(branch_info, dict) or set(branch_info) != {"name", "sha", "protected"}
+                or branch_info["name"] != pr["head"] or branch_info["sha"] != pr["head_sha"]
+                or branch_info["protected"] is not False):
+            raise Blocked("connector branch is protected or has a mismatched identity")
     if pr["state"] != "closed" or pr["merged"] is not True or evidence["open_pull_requests"]:
         raise Blocked("connector evidence does not prove an unshared merged PR")
     try:
@@ -266,10 +274,12 @@ def verify(
     if task_sha is not None and task_sha != state["head"]:
         raise Blocked("task remote ref moved")
     if task_sha is not None:
-        if SUPERVISED_EVIDENCE is None:
-            branch_info = github_json(repo, f"branches/{quote(state['branch'], safe='')}")
-            if branch_info.get("protected") is not False:
-                raise Blocked("task branch is protected or protection is unknown")
+        branch_info = github_json(repo, f"branches/{quote(state['branch'], safe='')}")
+        if branch_info.get("protected") is not False:
+            raise Blocked("task branch is protected or protection is unknown")
+        branch_sha = branch_info.get("sha") if SUPERVISED_EVIDENCE is not None else (branch_info.get("commit") or {}).get("sha")
+        if branch_sha != state["head"]:
+            raise Blocked("GitHub branch head differs from the recorded task head")
         owner = repo.split("/", 1)[0]
         head_filter = quote(f"{owner}:{state['branch']}", safe="")
         if github_list(repo, f"pulls?state=open&head={head_filter}&per_page=100"):

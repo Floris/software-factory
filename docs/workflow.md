@@ -140,7 +140,7 @@ described in [the lifecycle runner guide](lifecycle-runner.md). Attended
 sessions may use [the supervised procedure](supervised-lifecycle.md) from the
 clean canonical factory `main` checkout, with private connector evidence and
 an explicit root-owned lifecycle policy. This mode trusts the root Oracle's
-attestation and GitHub's push-time protection gate.
+attestation of GitHub PR, repository, and branch-protection facts.
 
 The Oracle owns every lifecycle mutation. Immediately after a successful merge
 is observed, and before waiting for image, deployment, or promotion delivery,
