@@ -1,5 +1,8 @@
 # Beads model
 
+Historical record. Superseded by [the GitHub Issues model](issues-model.md) on
+2026-09-21. Do not use this document for new task claims or host setup.
+
 ## Placement
 
 The source of truth is one Beads database in `software-factory` for factory,

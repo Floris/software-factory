@@ -1,6 +1,6 @@
 # Software Factory
 
-Control repository for the Codex- and Beads-driven development factory that
+Control repository for the Codex- and GitHub Issues-driven development factory that
 will run on the VPS alongside the existing K3s cluster.
 
 This repository defines how work is selected, executed, reviewed, promoted,
@@ -10,13 +10,13 @@ state.
 ## Current status
 
 The repository currently contains the architecture, security boundaries,
-Beads conventions, migration runbook, workflow, roadmap, and example
-configuration. The manual task-store cutover is complete: the factory's
-canonical Beads database and remote contain the factory, product, and
-deployment tasks. Unattended routing remains gated by host-configuration
-migration and trusted-runner fault tests.
+central GitHub Issues task model, workflow, roadmap, and example
+configuration. The manual task-store cutover is complete: Issues in this
+repository hold new factory, product, and deployment work. The old Beads
+store is historical. Unattended claims remain gated by a trusted atomic
+coordination mechanism, scoped Issues access, and runner fault tests.
 Executable orchestration tooling will be implemented and tested on the Linux
-VPS, where Codex CLI, Beads, systemd, Git credentials, and the restricted K3s
+VPS, where Codex CLI, systemd, Git credentials, and the restricted K3s
 observer identity are available.
 
 ## Sources of truth
@@ -32,7 +32,7 @@ observer identity are available.
 ## Intended flow
 
 ```text
-Beads ready work
+GitHub Issues ready work
     -> factory claims one task
     -> isolated Git worktree
     -> Codex implements and validates
@@ -43,7 +43,7 @@ Beads ready work
     -> ArgoCD reconciles DEV
     -> factory verifies health
     -> local task worktree and branch cleanup
-    -> Beads task closes
+    -> GitHub Issue closes
 ```
 
 ## VPS directory layout
@@ -57,7 +57,7 @@ All Git projects use one predictable root:
 │   ├── <product-id>/
 │   └── website-k8s/
 ├── worktrees/              task-specific writable Git worktrees
-│   └── <repository>/<bead-id>/
+│   └── <repository>/<issue-id>/
 └── runtime/                locks and resumable run metadata; never Git
 ```
 
@@ -74,8 +74,8 @@ tracked [`config/repositories.example.yaml`](config/repositories.example.yaml)
 documents the contract with neutral placeholders; it is not deployment state.
 An operator registers each repository with its exact canonical checkout,
 remote, default branch, policy, and non-secret credential references keyed by
-operation. One top-level registration identifies the central Beads database,
-remote, and synchronization binding.
+operation. Central GitHub Issues hold task state; the host file has no task
+database or task-sync binding.
 
 A product registration may define several `components`. Each component maps a
 source directory to one or more OCI package repositories, all with the
@@ -90,14 +90,14 @@ deployment delivery until its package identity, CI publication boundary, and
 factory `package_read` binding are validated.
 
 Before admitting work, the Oracle verifies the canonical checkout and remote,
-repository `AGENTS.md`, central Beads ownership and synchronized remote, trusted
+repository `AGENTS.md`, central GitHub Issues access, trusted
 argument-array validation profile, package/deployment references, and
 repository-scoped credentials. Missing, ambiguous, or inconsistent data fails
 closed. See the [workflow](docs/workflow.md#repository-onboarding) for the full
 onboarding sequence.
 
 `credential_refs` are provider lookup keys, never tokens or private keys. Git
-read/write, central Beads synchronization, package read, and GitOps read/write are
+read/write, Issues access, package read, and GitOps read/write are
 separate operations. Each reference must resolve to an identity scoped to the
 exact repository or declared package set. Package publication is deliberately
 absent: repository CI uses its own job-scoped GitHub Actions `GITHUB_TOKEN` and
@@ -143,11 +143,11 @@ codex
 - [Architecture](docs/architecture.md)
 - [Workflow](docs/workflow.md)
 - [Security model](docs/security-model.md)
-- [Beads model](docs/beads-model.md)
-- [Central Beads migration runbook](docs/central-beads-migration.md)
+- [GitHub Issues model](docs/issues-model.md)
+- [Task-store cutover](docs/github-issues-cutover.md)
 - [Roadmap](ROADMAP.md)
 - [Why this is a separate repository](docs/decisions/0001-separate-control-repository.md)
-- [Why tasks move to one store](docs/decisions/0002-central-beads-task-store.md)
+- [Why tasks use GitHub Issues](docs/decisions/0004-github-issues-task-store.md)
 - [Supervised lifecycle decision](docs/decisions/0003-supervised-branch-lifecycle.md)
 
 ## VPS bootstrap boundary
@@ -157,7 +157,7 @@ the first implementation task will:
 
 1. create a non-root factory user and protected workspace;
 2. clone this repository;
-3. initialize and synchronize Beads;
+3. verify central GitHub Issues access and the registered repository ID;
 4. create host-local configuration from the examples;
 5. register explicitly opted-in product repositories and their component
    mappings;

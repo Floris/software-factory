@@ -11,16 +11,8 @@ runtime_root: /srv/software-factory/runtime
 # Canonical checkouts stay clean; task changes happen only in Git worktrees.
 # `credential_refs` values are non-secret lookup keys. The credential provider,
 # not this file, stores and returns credential material for the exact operation.
-# One central Beads database serves all registered repositories. The host
-# runner rejects a mixed central/per-repository Beads configuration. Do not
-# duplicate the central remote in tracked product `.beads/config.yaml`.
 # Legacy entries without this field are parseable for supervised migration but
 # fail unattended preflight until every required operation is configured.
-
-beads:
-  path: /srv/software-factory/repos/factory-control/.beads
-  remote: git+ssh://git@github.com/example-org/factory-control.git
-  credential_ref: credential-provider://factory-control/beads-sync
 
 repositories:
   - id: factory-control

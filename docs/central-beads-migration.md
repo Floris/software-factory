@@ -1,5 +1,8 @@
 # Central Beads migration
 
+Historical record. Superseded by [the GitHub Issues cutover](github-issues-cutover.md)
+on 2026-09-21. Do not use this runbook for new task claims or host setup.
+
 ## State on 2026-09-21
 
 The manual task-store cutover used the three Dolt remotes as its source. The

@@ -32,7 +32,7 @@ class LifecycleTests(unittest.TestCase):
         self.bare = self.root / "remote.git"
         self.repo = self.root / "repo"
         self.workspaces = self.root / "worktrees"
-        self.task = "sf-test"
+        self.task = "issue-14"
         self.repository_id = "demo"
         self.worktree = self.workspaces / self.repository_id / self.task
         self.state_root = self.root / "state"
@@ -51,7 +51,7 @@ class LifecycleTests(unittest.TestCase):
         git(self.worktree, "add", "task.txt")
         git(self.worktree, "commit", "-m", "task")
         self.head = git(self.worktree, "rev-parse", "HEAD")
-        git(self.worktree, "push", "origin", "HEAD:refs/heads/codex/sf-test-work")
+        git(self.worktree, "push", "origin", "HEAD:refs/heads/codex/issue-14-work")
         git(self.repo, "merge", "--no-ff", "-m", "Merge pull request #7", f"codex/{self.task}-work")
         self.merge = git(self.repo, "rev-parse", "HEAD")
         git(self.repo, "push", "origin", "main")
@@ -74,6 +74,22 @@ class LifecycleTests(unittest.TestCase):
             return {"protected": False, "commit": {"sha": self.head}}
         raise AssertionError(endpoint)
 
+    def test_repository_config_does_not_require_beads_store(self) -> None:
+        registration = {"version": 2, "repositories": [{
+            "id": self.repository_id, "path": str(self.repo),
+            "remote": str(self.bare), "policy": "demo",
+            "credential_refs": {"git_read": "read", "git_write": "write"},
+        }]}
+        policies = {"policies": {"demo": {
+            "lifecycle": {"delete_merged_remote_branch": True},
+            "git": {"delete_branch": False},
+        }}}
+        with patch.object(lifecycle, "root_yaml", side_effect=[registration, policies]):
+            observed, entry, policy = lifecycle.repository_config(self.repository_id)
+        self.assertEqual(observed, registration)
+        self.assertEqual(entry["id"], self.repository_id)
+        self.assertTrue(policy["lifecycle"]["delete_merged_remote_branch"])
+
     def connector_evidence(self) -> dict:
         return {
             "version": 1, "repo": "Floris/demo", "task_id": self.task,
@@ -93,7 +109,7 @@ class LifecycleTests(unittest.TestCase):
     def write_evidence(self, evidence: dict) -> Path:
         directory = self.root / "connector-evidence"
         directory.mkdir(mode=0o700, exist_ok=True)
-        path = directory / "sf-test.json"
+        path = directory / "issue-14.json"
         path.write_text(json.dumps(evidence))
         path.chmod(0o600)
         return path
@@ -113,7 +129,7 @@ class LifecycleTests(unittest.TestCase):
         with self.patches():
             result = lifecycle.process(self.task, self.repository_id, 7)
             self.assertEqual(result["remote_delete"], "completed")
-            self.assertIsNone(lifecycle.remote_sha(self.repo, "refs/heads/codex/sf-test-work"))
+            self.assertIsNone(lifecycle.remote_sha(self.repo, "refs/heads/codex/issue-14-work"))
             self.assertEqual(lifecycle.remote_sha(self.repo, "refs/heads/main"), self.merge)
             self.assertTrue(self.worktree.is_dir())
             self.assertEqual(lifecycle.process(self.task, self.repository_id, 7)["remote_delete"], "completed")
@@ -125,7 +141,7 @@ class LifecycleTests(unittest.TestCase):
             self.assertEqual(result["worktree_remove"], "completed")
             self.assertEqual(result["local_branch_delete"], "completed")
             self.assertFalse(self.worktree.exists())
-            self.assertIsNone(lifecycle.local_ref_sha(self.repo, "codex/sf-test-work"))
+            self.assertIsNone(lifecycle.local_ref_sha(self.repo, "codex/issue-14-work"))
             self.assertEqual(lifecycle.process(self.task, self.repository_id, 7)["remote_delete"], "completed")
             self.assertEqual(lifecycle.cleanup_local(self.task, self.repository_id, 7,
                                                      "Merged code verified by Oracle")["local_branch_delete"], "completed")
@@ -137,7 +153,7 @@ class LifecycleTests(unittest.TestCase):
             with self.assertRaisesRegex(lifecycle.Blocked, "dirty"):
                 lifecycle.cleanup_local(self.task, self.repository_id, 7, "Merged code verified by Oracle")
             self.assertTrue(self.worktree.exists())
-            self.assertEqual(lifecycle.local_ref_sha(self.repo, "codex/sf-test-work"), self.head)
+            self.assertEqual(lifecycle.local_ref_sha(self.repo, "codex/issue-14-work"), self.head)
 
     def test_local_cleanup_rejects_missing_remote_deletion_evidence(self) -> None:
         with self.patches():
@@ -165,11 +181,11 @@ class LifecycleTests(unittest.TestCase):
         with self.patches():
             with self.assertRaisesRegex(lifecycle.Blocked, "squash, rebase"):
                 lifecycle.process(self.task, self.repository_id, 7)
-            self.assertEqual(lifecycle.remote_sha(self.repo, "refs/heads/codex/sf-test-work"), self.head)
+            self.assertEqual(lifecycle.remote_sha(self.repo, "refs/heads/codex/issue-14-work"), self.head)
 
     def test_moved_remote_head_is_rejected(self) -> None:
         git(self.worktree, "push", "origin", "HEAD:refs/heads/other")
-        git(self.repo, "push", "origin", ":refs/heads/codex/sf-test-work")
+        git(self.repo, "push", "origin", ":refs/heads/codex/issue-14-work")
         with self.patches():
             with self.assertRaisesRegex(lifecycle.Blocked, "remote ref mismatch"):
                 lifecycle.process(self.task, self.repository_id, 7)
@@ -178,26 +194,26 @@ class LifecycleTests(unittest.TestCase):
         with self.patches(), patch.object(lifecycle, "github_list", return_value=[{"number": 8}]):
             with self.assertRaisesRegex(lifecycle.Blocked, "shared"):
                 lifecycle.process(self.task, self.repository_id, 7)
-            self.assertEqual(lifecycle.remote_sha(self.repo, "refs/heads/codex/sf-test-work"), self.head)
+            self.assertEqual(lifecycle.remote_sha(self.repo, "refs/heads/codex/issue-14-work"), self.head)
 
     def test_executing_state_recovers_only_exact_absence(self) -> None:
         with self.patches():
             state_file, _ = lifecycle.state_paths(self.repository_id, self.task)
             state = {
                 "task_id": self.task, "repository_id": self.repository_id, "pr_number": 7,
-                "branch": "codex/sf-test-work", "head": self.head, "merge": self.merge,
+                "branch": "codex/issue-14-work", "head": self.head, "merge": self.merge,
                 "default": "main", "worktree": str(self.worktree),
                 "remote_delete": "executing", "local_cleanup": "pending",
             }
             lifecycle.persist(state_file, state)
-            git(self.repo, "push", "origin", ":refs/heads/codex/sf-test-work")
+            git(self.repo, "push", "origin", ":refs/heads/codex/issue-14-work")
             self.assertEqual(lifecycle.process(self.task, self.repository_id, 7)["remote_delete"], "completed")
 
     def test_missing_lifecycle_policy_fails_before_remote_access(self) -> None:
         with patch.object(lifecycle, "repository_config", side_effect=lifecycle.Blocked("policy denied")):
             with self.assertRaisesRegex(lifecycle.Blocked, "policy denied"):
                 lifecycle.process(self.task, self.repository_id, 7)
-        self.assertEqual(lifecycle.remote_sha(self.repo, "refs/heads/codex/sf-test-work"), self.head)
+        self.assertEqual(lifecycle.remote_sha(self.repo, "refs/heads/codex/issue-14-work"), self.head)
 
     def test_supervised_connector_evidence_runs_exact_merge_checks(self) -> None:
         path = self.write_evidence(self.connector_evidence())
@@ -211,7 +227,7 @@ class LifecycleTests(unittest.TestCase):
             stack.enter_context(patch.object(lifecycle, "github_name", return_value="Floris/demo"))
             result = lifecycle.process(self.task, self.repository_id, 7)
         self.assertEqual(result["remote_delete"], "completed")
-        self.assertIsNone(lifecycle.remote_sha(self.repo, "refs/heads/codex/sf-test-work"))
+        self.assertIsNone(lifecycle.remote_sha(self.repo, "refs/heads/codex/issue-14-work"))
 
     def test_historical_pr_base_can_be_contained_in_current_default(self) -> None:
         evidence = self.connector_evidence()
@@ -272,7 +288,7 @@ class LifecycleTests(unittest.TestCase):
         with patch.object(lifecycle, "EVIDENCE_ROOT", path.parent):
             with self.assertRaisesRegex(lifecycle.Blocked, "protected"):
                 lifecycle.load_supervised_evidence(path, self.task, self.repository_id, 7)
-        self.assertEqual(lifecycle.remote_sha(self.repo, "refs/heads/codex/sf-test-work"), self.head)
+        self.assertEqual(lifecycle.remote_sha(self.repo, "refs/heads/codex/issue-14-work"), self.head)
 
 
 if __name__ == "__main__":

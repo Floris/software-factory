@@ -11,7 +11,7 @@ artifacts, and ArgoCD reconciles deployment state back onto K3s.
 
 ```text
 Human
-  -> Beads priorities and acceptance criteria
+  -> central GitHub Issues priorities and acceptance criteria
   -> Software Factory Oracle on VPS
        -> isolated worktree
        -> Codex CLI worker
@@ -27,17 +27,17 @@ Human
        -> K3s DEV
   -> read-only deployment verification
   -> safe local task branch and worktree cleanup
-  -> Beads completion
+  -> GitHub Issue completion
 ```
 
 ## Source-of-truth boundaries
 
 | Concern | Source of truth |
 | --- | --- |
-| Product requirements and work state | Central `software-factory` Beads |
+| Product requirements and work state | Central `software-factory` GitHub Issues |
 | Application behavior | Product repository Git history |
 | Container artifact | GHCR immutable digest or full commit tag |
-| Deployment work state | Central `software-factory` Beads |
+| Deployment work state | Central `software-factory` GitHub Issues |
 | Kubernetes desired state | `website-k8s` Git history |
 | Runtime reconciliation | ArgoCD |
 | Factory behavior and policy | This repository |
@@ -52,9 +52,9 @@ Human
 │   ├── <product-id>/       canonical product checkout, clean default branch
 │   └── website-k8s/        canonical GitOps checkout, clean `main`
 ├── worktrees/
-│   ├── software-factory/<bead-id>/
-│   ├── <product-id>/<bead-id>/
-│   └── website-k8s/<bead-id>/
+│   ├── software-factory/<issue-id>/
+│   ├── <product-id>/<issue-id>/
+│   └── website-k8s/<issue-id>/
 └── runtime/
     ├── locks/
     └── runs/<run-id>/
@@ -69,11 +69,10 @@ Directory rules:
 - `repos/<repository>` is the registered canonical checkout used for fetch,
   synchronization, and worktree administration. Its default branch stays
   clean. Only deterministic Oracle operations may write its Git metadata.
-  The one canonical `.beads` database is in `repos/software-factory` and is
-  written only by the trusted host runner. Implementation and review workers
-  receive no canonical checkout write access.
-- `worktrees/<repository>/<bead-id>` is the only writable source workspace for
-  an implementation task. One worktree belongs to one Bead and one branch.
+  Implementation and review workers receive no canonical checkout write
+  access. The former `.beads` directory is retained only as history.
+- `worktrees/<repository>/<issue-id>` is the only writable source workspace for
+  an implementation task. One worktree belongs to one Issue and one branch.
 - `runtime` contains resumable execution metadata and locks, never durable work
   or secrets, and is not a Git repository.
 - `/etc/software-factory` contains root-provisioned, host-local configuration.
@@ -85,8 +84,8 @@ Directory rules:
 
 The root-provisioned `/etc/software-factory/repositories.yaml` is the runtime
 allowlist. Each entry identifies exactly one canonical Git repository, default
-branch, policy, and trusted validation command arrays. One top-level Beads
-registration identifies the central database and remote. A product
+branch, policy, and trusted validation command arrays. Central GitHub Issues
+records tasks; no task database is registered in host configuration. A product
 entry may additionally declare named components, the OCI package repositories
 each component publishes, and the registered GitOps applications that consume
 those components.
@@ -103,9 +102,10 @@ Each repository entry also carries non-secret `credential_refs` keyed by
 operation. The
 trusted credential provider resolves the reference; credential material never
 appears in repository configuration. Git read/write resolve against the
-selected source repository, while central Beads synchronization uses only its
-top-level binding. Package read resolves against that
-repository's declared package set, and GitOps read/write against the target
+selected source repository. Supervised issue access uses the authenticated
+GitHub connector; unattended issue access requires a separate approved
+credential and claim mechanism. Package read resolves against that repository's
+declared package set, and GitOps read/write against the target
 GitOps repository. A product credential is never a fallback for its deployment
 repository or another product.
 
@@ -116,8 +116,7 @@ successful run, full-SHA artifact identity, and OCI provenance; CI neither
 reads host registration nor receives a registry-push credential from the VPS.
 
 Repository IDs, canonical paths, and normalized Git repository
-identities/remotes are each unique across registrations. The central Beads path
-and remote have one explicit registration. Every repository entry
+identities/remotes are each unique across registrations. Every repository entry
 has exactly one scalar `default_branch`; the branch value is local to that
 repository, so several repositories may all use `main`.
 
@@ -139,14 +138,13 @@ before a claim or external mutation.
 Legacy version 1 entries without `credential_refs` remain parseable so an
 operator can migrate the host file without an unsafe flag day. They authorize
 only the documented operator-supervised manual bootstrap path. The unattended
-runner rejects them before repository access, Beads synchronization, package
-access, or GitOps work. It also rejects a reference that is missing, reused
+runner rejects them before repository access, package access, or GitOps work. It also rejects a reference that is missing, reused
 across repository boundaries, unresolved, or broader than its exact operation.
 
 Repository onboarding is complete only when the canonical checkout is clean,
 its exact remote and default branch match host configuration, repository-level
-`AGENTS.md` is present, the central Beads database is synchronized and the
-repository ID is valid, and its trusted validation and delivery contracts are
+`AGENTS.md` is present, the central GitHub Issues repository is reachable and
+the repository ID is valid, and its trusted validation and delivery contracts are
 usable. The operator owns registration in `/etc`; the factory never
 discovers a repository and silently grants itself authority over it.
 
@@ -173,7 +171,7 @@ ready
 ```
 
 Every transition must be idempotent. After interruption, the runner discovers
-the current Beads, Git, pull-request, CI, image, and ArgoCD state before it
+the current Issue, Git, pull-request, CI, image, and ArgoCD state before it
 performs another mutation.
 
 The lifecycle has two Oracle-owned, independently locked phases. The following
@@ -227,12 +225,12 @@ ancestry, protection, cleanliness, and activity check can be re-proven.
 Absence while `pending` blocks. The Oracle rechecks that the retained worktree
 is clean and inactive, then removes only the recorded exact worktree and local
 task branch, each with its own durable `pending -> executing -> completed`
-state, and closes the Bead only after both steps complete.
+state, and closes the Issue only after both steps complete.
 The exclusive lock remains held through observation of each local mutation,
-durable evidence persistence, and Bead closure.
+durable evidence persistence, and Issue closure.
 
 On partial failure, the Oracle records current state while holding the lock,
-leaves the Bead open, and permits a later lock holder to revalidate and resume
+leaves the Issue open, and permits a later lock holder to revalidate and resume
 idempotently. Any shared, default, protected, updated, active, dirty,
 unmerged, ambiguously mapped, or otherwise unprovable ref or worktree fails
 closed and preserves all remaining resources.
@@ -241,9 +239,9 @@ closed and preserves all remaining resources.
 
 - The initial VPS supports one writing worker globally.
 - Read-only analysis and review may run concurrently when they cannot update
-  Beads or shared files.
+  Issues or shared files.
 - Later concurrency uses one Git worktree per task and serialized ownership of
-  hot files, Beads state, and deployment manifests.
+  hot files, Issue updates, and deployment manifests.
 
 ## Resource placement
 

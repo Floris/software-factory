@@ -50,22 +50,13 @@ SHA-bound atomic lease. It observes exact remote absence before persisting
 missing resource in `pending` blocks; an exact missing resource in `executing`
 can be recovered after the remaining identity and ancestry checks pass.
 
-The Oracle records the completed steps in the central Bead and closes the task
+The Oracle records the completed steps in the central Issue and closes the task
 only after its requested delivery level has been verified. A DEV deployment
 task is not locally cleaned merely because its GitOps PR merged.
 
-## Dolt refs
+## Historical Dolt refs
 
-`refs/dolt/data` in `software-factory` is the active central Beads remote and
-must stay. Dolt also pushes a visible `__dolt_remote_info__` branch containing
-`DOLT_REMOTE.md` after successful data pushes. That branch is informational,
-but deleting it while the central Git-backed remote is active is temporary:
-the next sync can recreate it. Dolt's `DOLT_REMOTE_INFO_BRANCH` override can be
-set to an empty string in every trusted central sync process to suppress new
-info-branch writes; verify that setting before removing the existing central
-info branch. The old Expense Tracker and `website-k8s` info branches no longer
-serve the central database. They are outside this task-ref runner's scope;
-remove them only after the legacy stores and host registration have been
-retired and a separate reviewed maintenance operation verifies their exact
-refs. Keep the old data refs until the accepted audit-retention decision is
-explicitly changed.
+The previous `refs/dolt/data` and Dolt information refs are historical task
+data after the GitHub Issues cutover. This task-branch runner never targets
+them. Their retention or removal requires a separate reviewed maintenance
+decision with exact-ref evidence.
