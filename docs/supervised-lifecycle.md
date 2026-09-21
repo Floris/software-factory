@@ -70,6 +70,9 @@ The runner accepts only this schema, the exact requested task/PR/repository,
 and evidence no older than 15 minutes. It checks the registered Git remote,
 clean canonical checkout and exact dedicated worktree, live default and task
 refs, PR head and merge identity, true merge second parent, and ancestry. It
+records the PR's historical base separately from the repository's current
+default branch, so a PR merged into `master` before a rename can qualify only
+when that exact merge is contained in the current `main` history. It
 holds the task lock and writes durable `pending -> executing -> completed`
 state. Remote deletion uses `--force-with-lease` bound to the recorded task
 head and is considered complete only after exact remote absence is observed.

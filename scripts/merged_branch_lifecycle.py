@@ -177,7 +177,7 @@ def load_supervised_evidence(path: Path, task_id: str, repository_id: str, pr_nu
     pr_fields = {"number", "state", "merged", "head", "head_sha", "head_repo_full_name", "base", "merge_commit_sha"}
     if not isinstance(pr, dict) or set(pr) != pr_fields or pr["number"] != pr_number:
         raise Blocked("invalid connector pull request evidence")
-    if pr["head_repo_full_name"] != evidence["repo"] or pr["base"] != evidence["default_branch"]:
+    if pr["head_repo_full_name"] != evidence["repo"] or not isinstance(pr["base"], str):
         raise Blocked("connector pull request repository or base mismatch")
     if not isinstance(pr["head"], str) or not pr["head"].startswith(f"codex/{task_id.replace('.', '-')}-"):
         raise Blocked("connector pull request task branch mismatch")
@@ -252,7 +252,7 @@ def verify(
         raise Blocked("pull request task head changed")
     if (pr.get("head") or {}).get("repo", {}).get("full_name") != repo:
         raise Blocked("pull request head repository mismatch")
-    if (pr.get("base") or {}).get("ref") != state["default"] or pr.get("merge_commit_sha") != state["merge"]:
+    if (pr.get("base") or {}).get("ref") != state.get("pr_base", state["default"]) or pr.get("merge_commit_sha") != state["merge"]:
         raise Blocked("pull request base or merge identity mismatch")
     repository = github_json(repo, "")
     if repository.get("default_branch") != state["default"]:
@@ -351,15 +351,19 @@ def process(task_id: str, repository_id: str, pr_number: int) -> dict:
             head = (pr.get("head") or {}).get("sha", "")
             merge = pr.get("merge_commit_sha", "")
             default = entry.get("default_branch", "")
+            pr_base = (pr.get("base") or {}).get("ref", "")
             task_slug = task_id.replace(".", "-")
             if (not branch.startswith(f"codex/{task_slug}-")
                     or run(["git", "check-ref-format", "--branch", branch], Path(entry["path"]), check=False).returncode
+                    or not isinstance(pr_base, str)
+                    or run(["git", "check-ref-format", "--branch", pr_base], Path(entry["path"]), check=False).returncode
                     or not SHA.fullmatch(head) or not SHA.fullmatch(merge)):
                 raise Blocked("pull request does not identify an exact task head")
             workspaces = Path(registration["workspace_root"]) / repository_id
             worktree = worktree_for(Path(entry["path"]), workspaces, task_id, branch, head)
             state = {"task_id": task_id, "repository_id": repository_id, "pr_number": pr_number,
                      "branch": branch, "head": head, "merge": merge, "default": default,
+                     "pr_base": pr_base,
                      "worktree": str(worktree), "remote_delete": "pending",
                      "worktree_remove": "pending", "local_branch_delete": "pending"}
             verify(state, entry, registration, require_remote=True)

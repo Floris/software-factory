@@ -207,6 +207,23 @@ class LifecycleTests(unittest.TestCase):
         self.assertEqual(result["remote_delete"], "completed")
         self.assertIsNone(lifecycle.remote_sha(self.repo, "refs/heads/codex/sf-test-work"))
 
+    def test_historical_pr_base_can_be_contained_in_current_default(self) -> None:
+        evidence = self.connector_evidence()
+        evidence["pull_request"]["base"] = "master"
+        path = self.write_evidence(evidence)
+        with patch.object(lifecycle, "EVIDENCE_ROOT", path.parent):
+            loaded = lifecycle.load_supervised_evidence(path, self.task, self.repository_id, 7)
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(lifecycle, "SUPERVISED_EVIDENCE", loaded))
+            stack.enter_context(patch.object(lifecycle, "STATE_ROOT", self.state_root))
+            stack.enter_context(patch.object(lifecycle, "repository_config",
+                                             return_value=(self.registration, self.entry, {})))
+            stack.enter_context(patch.object(lifecycle, "github_name", return_value="Floris/demo"))
+            result = lifecycle.process(self.task, self.repository_id, 7)
+        self.assertEqual(result["pr_base"], "master")
+        self.assertEqual(result["default"], "main")
+        self.assertEqual(result["remote_delete"], "completed")
+
     def test_supervised_evidence_rejects_stale_and_shared_head(self) -> None:
         evidence = self.connector_evidence()
         evidence["observed_at"] = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
