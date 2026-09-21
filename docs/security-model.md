@@ -14,8 +14,14 @@
   Beads state.
 - Delegated agents cannot create or delete branches or worktrees, mutate pull
   requests, merge, or perform lifecycle cleanup. Read-only architect and
-  reviewer roles make no external mutations. All delegated roles execute only
+  reviewer roles, including `pull_request_reviewer`, make no external
+  mutations. All delegated roles execute only
   trusted validation commands supplied by the Oracle or host configuration.
+- A pull request review result cannot grant merge authority. The Oracle reads
+  `git.merge_pull_request` only from root-owned host policy, refreshes exact PR
+  and required-check facts independently, and alone performs a true merge and
+  the following locked lifecycle step. A false or absent flag requires human
+  approval for the exact PR.
 - Cannot access `/root`, production secrets, the container runtime socket, or
   cluster-admin credentials.
 
@@ -120,7 +126,8 @@
 - Project-scoped agent definitions pin each role independently: `app_worker`
   uses `gpt-5.6-sol` with medium reasoning, `project_architect` uses
   `gpt-6-astra` with high reasoning, and `quality_reviewer` uses
-  `gpt-6-astra` with extra-high reasoning. There is no global agent-model
+  `gpt-6-astra` with extra-high reasoning. `pull_request_reviewer` uses
+  `gpt-6-astra` with high reasoning. There is no global agent-model
   override, so these reviewed role assignments do not silently change the
   Oracle or unrelated roles.
 - Canonical repository and Beads mutations are deterministic Oracle operations
