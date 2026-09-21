@@ -90,6 +90,16 @@ class LifecycleTests(unittest.TestCase):
         self.assertEqual(entry["id"], self.repository_id)
         self.assertTrue(policy["lifecycle"]["delete_merged_remote_branch"])
 
+    def test_registered_underscore_repository_id_reaches_config_lookup(self) -> None:
+        with patch.object(lifecycle, "repository_config", side_effect=RuntimeError("lookup reached")):
+            with self.assertRaisesRegex(RuntimeError, "lookup reached"):
+                lifecycle.process(self.task, "droppert_dev", 7)
+
+        for repository_id in ("../outside", "bad/repo", "bad.repo", "bad repo"):
+            with self.subTest(repository_id=repository_id):
+                with self.assertRaisesRegex(lifecycle.Blocked, "invalid task"):
+                    lifecycle.process(self.task, repository_id, 7)
+
     def connector_evidence(self) -> dict:
         return {
             "version": 1, "repo": "Floris/demo", "task_id": self.task,

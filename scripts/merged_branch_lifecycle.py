@@ -33,7 +33,7 @@ EVIDENCE_ROOT = Path("/srv/software-factory/runtime/lifecycle-evidence")
 SUPERVISED_EVIDENCE: dict | None = None
 GIT = "/usr/bin/git"
 TASK_ID = re.compile(r"[a-z][a-z0-9-]{1,31}(?:\.[0-9]{1,3})?")
-REPOSITORY_ID = re.compile(r"[a-z][a-z0-9-]{1,31}")
+REPOSITORY_ID = re.compile(r"[a-z][a-z0-9_-]{1,31}")
 SHA = re.compile(r"[0-9a-f]{40}")
 REPO = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
 
