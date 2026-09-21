@@ -78,6 +78,8 @@ factory entrypoint for every configured project.
 - `app_worker` implements exactly one Bead in its assigned project worktree.
 - `quality_reviewer` performs a read-only review against the Bead and the
   target repository's instructions using its explicitly pinned review model.
+- `pull_request_reviewer` checks one exact PR and its CI and review evidence
+  before a policy-authorized Oracle merge. It is read-only.
 
 The role files pin their own model and reasoning effort. There is no global
 agent-model override: the Oracle remains independently configurable, while
@@ -90,6 +92,13 @@ Oracle or host configuration.
 Every delegated agent must read the target repository's `AGENTS.md`. Product
 invariants stay in the product repository instead of being copied into these
 generic factory roles.
+
+For a registered repository with root-owned `git.merge_pull_request: true`,
+the Oracle may request a `pull_request_reviewer` verdict, independently refresh
+the PR identity and required checks, and perform a true merge. A false or
+missing value still requires explicit human approval. The reviewer never
+receives merge or lifecycle authority; the Oracle handles the merge and exact
+remote task-ref deletion in sequence.
 
 ## Operator entrypoint
 

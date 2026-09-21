@@ -104,6 +104,17 @@ repository. The task must state:
    task ref after a verified true merge. A GitHub auto-delete setting may
    exist, but the factory neither enables nor trusts it as lifecycle evidence.
 
+Before merging, the Oracle resolves the registered repository's root-owned
+policy. If `git.merge_pull_request: true`, it assigns the exact PR, base and
+head refs, and head SHA to the read-only `pull_request_reviewer`. A READY verdict
+is advice, not authority: the Oracle refreshes the PR identity, required CI
+checks and review state, confirms the task head and target default branch, and
+uses a true merge commit only when every gate still passes. It then immediately
+runs the merge-time lifecycle phase. A BLOCKED verdict, stale evidence, or a
+false or missing policy value prevents automatic merge; with a false value,
+the Oracle asks the human for approval of that exact PR. No delegated agent
+merges or deletes branches.
+
 Delegated architects, implementation workers, and reviewers do not create or
 delete branches or worktrees, mutate pull requests, or perform lifecycle
 cleanup. Architects and reviewers make no external mutations. Delegated roles
