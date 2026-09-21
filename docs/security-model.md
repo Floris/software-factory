@@ -136,6 +136,13 @@
 
 ## Lifecycle mutation boundary
 
+The manually invoked implementation requires a root-owned installed copy, a
+private durable state directory outside Codex write roots, and a trusted host
+launcher that supplies a repository-scoped GitHub read token through the
+credential provider. It never persists that token. The live version 1 host
+registration and policy without a lifecycle key cannot authorize execution;
+see [the lifecycle runner guide](lifecycle-runner.md).
+
 Root-owned policy keeps two authorities distinct. `git.delete_branch: false`
 denies branch deletion to delegated and model-controlled Git operations.
 `lifecycle.delete_merged_remote_branch: true` authorizes only the trusted

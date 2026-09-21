@@ -161,3 +161,6 @@ the first implementation task will:
 5. register explicitly opted-in product repositories and their component
    mappings;
 6. implement a manually invoked, single-task runner before any timer or daemon.
+
+The first manually invoked task-branch lifecycle implementation and its live
+installation gates are documented in [the lifecycle runner guide](docs/lifecycle-runner.md).
