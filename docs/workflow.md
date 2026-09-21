@@ -135,6 +135,10 @@ activity marker or one-time check of the lock is not sufficient on its own.
 
 ## Merge-time remote branch deletion
 
+The reviewed implementation and its host installation gates are described in
+[the lifecycle runner guide](lifecycle-runner.md). The source-tree script is
+not a trusted runner until installed outside model write authority.
+
 The Oracle owns every lifecycle mutation. Immediately after a successful merge
 is observed, and before waiting for image, deployment, or promotion delivery,
 it first requires `lifecycle.delete_merged_remote_branch: true` from the
