@@ -1,4 +1,4 @@
-version: 1
+version: 2
 
 factory_root: /srv/software-factory
 repository_root: /srv/software-factory/repos
@@ -11,10 +11,16 @@ runtime_root: /srv/software-factory/runtime
 # Canonical checkouts stay clean; task changes happen only in Git worktrees.
 # `credential_refs` values are non-secret lookup keys. The credential provider,
 # not this file, stores and returns credential material for the exact operation.
-# The `beads.remote` value is host registration data; do not duplicate it as a
-# tracked `sync.remote` in a product repository's `.beads/config.yaml`.
+# One central Beads database serves all registered repositories. The host
+# runner rejects a mixed central/per-repository Beads configuration. Do not
+# duplicate the central remote in tracked product `.beads/config.yaml`.
 # Legacy entries without this field are parseable for supervised migration but
 # fail unattended preflight until every required operation is configured.
+
+beads:
+  path: /srv/software-factory/repos/factory-control/.beads
+  remote: git+ssh://git@github.com/example-org/factory-control.git
+  credential_ref: credential-provider://factory-control/beads-sync
 
 repositories:
   - id: factory-control
@@ -22,13 +28,9 @@ repositories:
     remote: git@github.com:example-org/factory-control.git
     default_branch: main
     policy: factory-control
-    beads:
-      source: local
-      remote: git+ssh://git@github.com/example-org/factory-control.git
     credential_refs:
       git_read: credential-provider://factory-control/git-read
       git_write: credential-provider://factory-control/git-write
-      beads_sync: credential-provider://factory-control/beads-sync
 
   # `deployment` is the version 1 shorthand retained for a repository with one
   # deployable component. New multi-component registrations use `deployments`.
@@ -37,13 +39,9 @@ repositories:
     remote: git@github.com:example-org/example-service.git
     default_branch: main
     policy: product-dev
-    beads:
-      source: local
-      remote: git+ssh://git@github.com/example-org/example-service.git
     credential_refs:
       git_read: credential-provider://example-service/git-read
       git_write: credential-provider://example-service/git-write
-      beads_sync: credential-provider://example-service/beads-sync
     validation:
       commands:
         - [make, verify]
@@ -59,13 +57,9 @@ repositories:
     remote: git@github.com:example-org/example-suite.git
     default_branch: main
     policy: product-dev
-    beads:
-      source: local
-      remote: git+ssh://git@github.com/example-org/example-suite.git
     credential_refs:
       git_read: credential-provider://example-suite/git-read
       git_write: credential-provider://example-suite/git-write
-      beads_sync: credential-provider://example-suite/beads-sync
       package_read: credential-provider://example-suite/package-read
     validation:
       commands:
@@ -104,12 +98,8 @@ repositories:
     remote: git@github.com:example-org/deployment-config.git
     default_branch: main
     policy: infrastructure-dev
-    beads:
-      source: local
-      remote: git+ssh://git@github.com/example-org/deployment-config.git
     credential_refs:
       git_read: credential-provider://deployment-config/git-read
       git_write: credential-provider://deployment-config/git-write
-      beads_sync: credential-provider://deployment-config/beads-sync
       gitops_read: credential-provider://deployment-config/gitops-read
       gitops_write: credential-provider://deployment-config/gitops-write

@@ -34,10 +34,10 @@ Human
 
 | Concern | Source of truth |
 | --- | --- |
-| Product requirements and work state | Product repository Beads |
+| Product requirements and work state | Central `software-factory` Beads |
 | Application behavior | Product repository Git history |
 | Container artifact | GHCR immutable digest or full commit tag |
-| Deployment work state | `website-k8s` Beads |
+| Deployment work state | Central `software-factory` Beads |
 | Kubernetes desired state | `website-k8s` Git history |
 | Runtime reconciliation | ArgoCD |
 | Factory behavior and policy | This repository |
@@ -67,10 +67,11 @@ Human
 Directory rules:
 
 - `repos/<repository>` is the registered canonical checkout used for fetch,
-  synchronization, Beads discovery, and worktree administration. Its default
-  branch stays clean. Only deterministic Oracle operations may write its Git
-  metadata or `.beads`; implementation and review workers receive no canonical
-  checkout write access.
+  synchronization, and worktree administration. Its default branch stays
+  clean. Only deterministic Oracle operations may write its Git metadata.
+  The one canonical `.beads` database is in `repos/software-factory` and is
+  written only by the trusted host runner. Implementation and review workers
+  receive no canonical checkout write access.
 - `worktrees/<repository>/<bead-id>` is the only writable source workspace for
   an implementation task. One worktree belongs to one Bead and one branch.
 - `runtime` contains resumable execution metadata and locks, never durable work
@@ -84,7 +85,8 @@ Directory rules:
 
 The root-provisioned `/etc/software-factory/repositories.yaml` is the runtime
 allowlist. Each entry identifies exactly one canonical Git repository, default
-branch, policy, Beads remote, and trusted validation command arrays. A product
+branch, policy, and trusted validation command arrays. One top-level Beads
+registration identifies the central database and remote. A product
 entry may additionally declare named components, the OCI package repositories
 each component publishes, and the registered GitOps applications that consume
 those components.
@@ -97,10 +99,12 @@ ref after a verified true merge. It is neither general branch-delete authority
 nor permission to evaluate a model-produced command. A missing or false
 lifecycle key blocks that remote mutation.
 
-Each entry also carries non-secret `credential_refs` keyed by operation. The
+Each repository entry also carries non-secret `credential_refs` keyed by
+operation. The
 trusted credential provider resolves the reference; credential material never
-appears in repository configuration. Git read/write and Beads synchronization
-resolve against the selected source repository, package read against that
+appears in repository configuration. Git read/write resolve against the
+selected source repository, while central Beads synchronization uses only its
+top-level binding. Package read resolves against that
 repository's declared package set, and GitOps read/write against the target
 GitOps repository. A product credential is never a fallback for its deployment
 repository or another product.
@@ -111,8 +115,9 @@ job and `contents: read` otherwise. The factory validates the workflow boundary,
 successful run, full-SHA artifact identity, and OCI provenance; CI neither
 reads host registration nor receives a registry-push credential from the VPS.
 
-Repository IDs, canonical paths, normalized Git repository identities/remotes,
-and Beads remote identities are each unique across registrations. Every entry
+Repository IDs, canonical paths, and normalized Git repository
+identities/remotes are each unique across registrations. The central Beads path
+and remote have one explicit registration. Every repository entry
 has exactly one scalar `default_branch`; the branch value is local to that
 repository, so several repositories may all use `main`.
 
@@ -140,9 +145,9 @@ across repository boundaries, unresolved, or broader than its exact operation.
 
 Repository onboarding is complete only when the canonical checkout is clean,
 its exact remote and default branch match host configuration, repository-level
-`AGENTS.md` is present, its private canonical Beads database is synchronized to
-its own configured remote, and its trusted validation and delivery contracts
-are usable. The operator owns registration in `/etc`; the factory never
+`AGENTS.md` is present, the central Beads database is synchronized and the
+repository ID is valid, and its trusted validation and delivery contracts are
+usable. The operator owns registration in `/etc`; the factory never
 discovers a repository and silently grants itself authority over it.
 
 ## Execution state machine

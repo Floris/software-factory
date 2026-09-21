@@ -2,15 +2,14 @@
 
 ## Placement
 
-- This repository tracks work needed to build and operate the factory.
-- Each product repository tracks its own product work.
-- `website-k8s` tracks deployment and infrastructure work.
-
-Do not maintain a central duplicate of all product tasks. The factory discovers
-only repositories explicitly registered by the operator and queries each
-repository's canonical Beads database. A multi-component product still has one
-product Beads database; components and packages are routing metadata, not
-separate task stores.
+The source of truth is one Beads database in `software-factory` for factory,
+product, and deployment tasks. The manual cutover from three legacy stores is
+recorded in [the migration runbook](central-beads-migration.md); unattended
+routing remains disabled until its remaining gates pass. Every task has
+`metadata.repository_id`, resolved against root-provisioned host registration.
+Existing `sf-*`, `et-*`, and `wk-*` IDs are retained; prefixes do not authorize
+access or select the repository. New tasks use the central database's `sf-*`
+prefix. Product components and packages remain routing metadata.
 
 ## Ownership
 
@@ -18,14 +17,17 @@ The Oracle is the only actor allowed to claim, update, block, or close Beads.
 Implementation and review workers receive the selected task as input but do not
 write `.beads`.
 
-Each canonical `.beads` directory and its embedded Dolt files are owned by the
-dedicated factory account. The top-level directory uses mode `0700`. An
-unexpected owner or an unreadable Dolt manifest is a fail-closed host recovery
-condition: the runner stops before changing task state, preserves the database,
-and asks an operator to repair only the affected path. The factory process never
-uses `sudo`, weakens the directory mode, deletes the manifest, or reconstructs
-the database from an older copy while the current database may still be
-recoverable.
+The canonical central `.beads` directory and its embedded Dolt files are owned
+by the dedicated factory account. The top-level directory uses mode `0700` and
+the manifest uses `0600`. Supervised manual Oracle operations run as the
+dedicated non-root account outside Codex's sandbox, with ownership checks
+before and after each write. Unattended operations require a trusted host
+runner outside model write authority. The runner validates ownership, path,
+database identity, mode, and readability before and after each operation. An
+unexpected owner or unreadable manifest is a fail-closed host recovery
+condition. The factory process never uses `sudo`, weakens modes, or deletes the
+manifest. It does not reconstruct the database from an older copy while the
+current database may still be recoverable.
 
 ## Required task information
 
@@ -53,47 +55,24 @@ the workflow's narrow recovery rule for a step already persisted as
 
 ## Cross-repository work
 
-A product task that requires deployment creates a separate deployment task in
-`website-k8s`. Each task stores the other's ID plus immutable commit and image
-identifiers. The product task remains open until the requested delivery level
-is satisfied.
+A product task that requires deployment creates a separate task in the same
+central store with `repository_id` selecting `website-k8s`. Each task stores
+the other's ID plus immutable commit and image identifiers. The product task
+remains open until the requested delivery level is satisfied.
 
 ## Synchronization
 
-Each canonical Beads database uses its own Dolt remote. A runner pulls before
-selecting work and pushes after an Oracle-owned state change. Failure to
-synchronize blocks new claims rather than allowing divergent work state.
+The single central database uses one Dolt remote. The runner pulls before
+selecting work and pushes after an Oracle-owned change. Synchronization failure
+blocks claims. The remote comes only from root-provisioned host registration;
+repository content and task text cannot override it. Product registrations no
+longer supply a Beads remote or credential. A Git source binding is never a
+fallback for the central `beads_sync` binding. A new product is onboarded by
+registering its Git and validation contract, then assigning its repository ID
+to tasks in the central store.
 
-Repository IDs, canonical paths, normalized Git repository identities/remotes,
-and Beads remote identities must each be unique across entries in
-root-provisioned host configuration. Each repository declares exactly one
-default branch, but a branch name is not a global identity: multiple
-repositories may validly use `main` or another identical branch name. Reusing
-one Beads remote for multiple product repositories, falling back to a central
-database, or accepting a remote discovered from untrusted repository content
-is forbidden. New repository onboarding proves the same ownership, mode,
-readability, and pull/check/push invariants before that repository contributes
-ready work.
-
-The Oracle resolves the Dolt remote from root-provisioned
-`/etc/software-factory/repositories.yaml`. Do not commit the canonical remote
-to a product repository's tracked `.beads/config.yaml`. The trusted runner
-configures the local database at onboarding, and only the exact repository's
-`beads_sync` credential binding receives permission to publish that remote
-state. A Git source binding or another repository's Beads binding is never a
-fallback.
-
-Bootstrap an empty remote explicitly from trusted repository configuration:
-
-1. initialize the local database as the factory account;
-2. add the repository's Dolt remote when none is configured;
-3. push the existing local history once to create the remote branch; and
-4. run the normal pull, conflict check, blocked-state repair, and push cycle.
-
-Do not begin bootstrap with a pull from an empty remote. Do not force-push a
-Dolt remote during normal operation. Do not copy another repository's database
-to bootstrap a new product. Every canonical Beads operation has these trusted
-preflight and postflight checks:
+Every canonical Beads operation has these trusted preflight and postflight
+checks:
 
 1. resolve the canonical path and expected account from host configuration;
 2. reject symlinks, an owner other than the factory account, a top-level mode
@@ -105,10 +84,11 @@ preflight and postflight checks:
 
 Any mismatch halts claims and remote writes. Store recovery copies under the
 factory runtime root, outside Git, before repairing database ownership or
-history. The original `nobody:nogroup` ownership event was not attributable
-from retained logs, so unattended scheduling remains disabled until the runner
-enforces these checks and a repeatable fault test verifies the fail-closed
-path.
+history. The `nobody:nogroup` ownership event recurred in the legacy factory
+and Expense Tracker stores. The new central database retained `codex:codex`
+ownership after a supervised sync, but that alone does not prove recurrence is
+prevented. Unattended scheduling remains disabled until the runner enforces
+these checks and a repeatable fault test verifies the fail-closed path.
 
 ## Initial factory epic
 

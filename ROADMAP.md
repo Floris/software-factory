@@ -1,6 +1,6 @@
 # Roadmap
 
-Status reviewed on 2026-09-20 against the VPS, repository state, Beads state,
+Status reviewed on 2026-09-21 against the VPS, repository state, Beads state,
 Git history, and host configuration. Checked items are verified complete.
 Unchecked items remain delivery work; their `Current` note records implemented
 foundations without treating them as an operational capability.
@@ -30,19 +30,21 @@ foundations without treating them as an operational capability.
     multi-repository execution remains disabled while an account-wide
     bootstrap credential is usable or any required `credential_refs` entry is
     absent.
-- [x] Initialize canonical Beads databases and remotes.
-  - Evidence: `software-factory`, `expense-tracker`, and `website-k8s` each
-    completed a Dolt pull/check/push cycle. Their embedded databases are owned
-    by the non-root factory account and their top-level `.beads` directories
-    use mode `0700`.
-  - Current: the tracked host-configuration example now records the verified
-    contract and required Dolt remote fields with neutral placeholders.
-    Refresh the root-provisioned host copy with reviewed repository-specific
-    values before unattended execution.
+- [x] Cut over supervised manual work to one central Beads database and remote.
+  - Evidence: the factory database and a fresh independent remote clone have
+    the same 24 issues, all with repository IDs. Seven dependency edges and
+    non-routing issue fields survived import. The central manifest remained
+    `codex:codex` mode `0600` after a successful pull/push cycle. The operator
+    accepted possible loss of changes held only in inaccessible legacy local
+    databases; the old factory database was retained intact.
+- [ ] Migrate host Beads routing and fault-test the trusted runner.
+  - Current: `/etc/software-factory/repositories.yaml` still describes the
+    legacy per-repository layout. No installed runner protects canonical writes
+    from a sandboxed agent. Unattended claims remain disabled.
 - [ ] Register and preflight every opted-in product repository.
   - Current: the tracked contract supports one-to-many components, OCI package
     identities, and GitOps application mappings. Root-owned host registration,
-    exact remote/default-branch verification, per-repository Beads
+    exact remote/default-branch verification, central Beads
     synchronization, operation-keyed credential references, and credential
     audience checks remain operator work for each repository.
 
@@ -117,7 +119,10 @@ foundations without treating them as an operational capability.
 
 ## Next milestone
 
-Close the remaining repeatability gaps in the manual runner: install a durable
+Replace the legacy host registration with the central contract, install the
+trusted non-root runner, and fault-test ownership and sandbox isolation before
+unattended claims. Then close the remaining repeatability gaps
+in the manual runner: install a durable
 trusted Node.js runtime, record one structured worker result, and execute the
 configured validation profile from orchestration rather than an ad hoc shell.
 Implement and fault-test the canonical Beads ownership/mode preflight and
