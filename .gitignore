@@ -2,6 +2,8 @@
 .vscode/
 .DS_Store
 Thumbs.db
+__pycache__/
+*.pyc
 
 # Runtime state belongs on the VPS and must not be committed.
 .runtime/

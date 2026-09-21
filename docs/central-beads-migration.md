@@ -52,7 +52,12 @@ clones and JSONL exports are neither durable backups nor cutover evidence.
    other verified stores without ID renaming, title deduplication, or stale
    overwrite. Assign `metadata.repository_id` from trusted source registration;
    set it to `software-factory` for existing factory issues. Keep the legacy
-   prefixes. Preserve every old remote and full backup read-only.
+   prefixes. `scripts/prepare_central_beads_import.py` validates private source
+   exports, duplicate IDs, routing conflicts, and dependency edges before
+   creating a private combined JSONL file. It does not change a Beads database
+   or solve the factory-base timestamp-tie behavior: existing factory issues
+   need an explicit metadata update in the candidate. Preserve every old remote
+   and full backup read-only.
 2. Compare source and candidate IDs, statuses, descriptions, acceptance
    criteria, labels, comments, timestamps, and dependency edges. Only documented
    routing metadata and the associated migration update time may differ. Check
