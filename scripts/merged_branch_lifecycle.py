@@ -27,7 +27,8 @@ REGISTRATION = Path("/etc/software-factory/repositories.yaml")
 POLICIES = Path("/etc/software-factory/policies.yaml")
 STATE_ROOT = Path("/var/lib/software-factory/lifecycle")
 GIT = "/usr/bin/git"
-TASK_ID = re.compile(r"[a-z][a-z0-9-]{1,31}")
+TASK_ID = re.compile(r"[a-z][a-z0-9-]{1,31}(?:\.[0-9]{1,3})?")
+REPOSITORY_ID = re.compile(r"[a-z][a-z0-9-]{1,31}")
 SHA = re.compile(r"[0-9a-f]{40}")
 REPO = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
 
@@ -155,7 +156,7 @@ def worktree_for(checkout: Path, workspaces: Path, task_id: str, branch: str, he
     if len(matches) != 1:
         raise Blocked("task branch must have exactly one dedicated worktree")
     path = matches[0]
-    if path.is_symlink() or not path.is_dir() or path.parent != workspaces or path.name != task_id:
+    if path.is_symlink() or not path.is_dir() or path.parent != workspaces or path.name != task_id.replace(".", "-"):
         raise Blocked("task worktree is outside the registered dedicated path")
     if run(["git", "status", "--porcelain"], path).stdout:
         raise Blocked("task worktree is dirty")
@@ -255,7 +256,7 @@ def load(path: Path) -> dict:
 
 
 def process(task_id: str, repository_id: str, pr_number: int) -> dict:
-    if not TASK_ID.fullmatch(task_id) or not TASK_ID.fullmatch(repository_id) or pr_number < 1:
+    if not TASK_ID.fullmatch(task_id) or not REPOSITORY_ID.fullmatch(repository_id) or pr_number < 1:
         raise Blocked("invalid task, repository, or pull request identity")
     registration, entry, _ = repository_config(repository_id)
     state_file, lock_file = state_paths(repository_id, task_id)
@@ -272,7 +273,10 @@ def process(task_id: str, repository_id: str, pr_number: int) -> dict:
             head = (pr.get("head") or {}).get("sha", "")
             merge = pr.get("merge_commit_sha", "")
             default = entry.get("default_branch", "")
-            if not branch.startswith(f"codex/{task_id}-") or not SHA.fullmatch(head) or not SHA.fullmatch(merge):
+            task_slug = task_id.replace(".", "-")
+            if (not branch.startswith(f"codex/{task_slug}-")
+                    or run(["git", "check-ref-format", "--branch", branch], Path(entry["path"]), check=False).returncode
+                    or not SHA.fullmatch(head) or not SHA.fullmatch(merge)):
                 raise Blocked("pull request does not identify an exact task head")
             workspaces = Path(registration["workspace_root"]) / repository_id
             worktree = worktree_for(Path(entry["path"]), workspaces, task_id, branch, head)
@@ -326,11 +330,13 @@ def local_ref_sha(checkout: Path, branch: str) -> str | None:
 def worktree_absent(checkout: Path, state: dict) -> bool:
     path = Path(state["worktree"])
     output = run(["git", "worktree", "list", "--porcelain"], checkout).stdout
-    return not path.exists() and f"worktree {path}\n" not in output and f"branch refs/heads/{state['branch']}\n" not in output
+    return (not path.exists() and not path.is_symlink()
+            and f"worktree {path}\n" not in output
+            and f"branch refs/heads/{state['branch']}\n" not in output)
 
 
 def cleanup_local(task_id: str, repository_id: str, pr_number: int, delivery_evidence: str) -> dict:
-    if not TASK_ID.fullmatch(task_id) or not TASK_ID.fullmatch(repository_id) or pr_number < 1:
+    if not TASK_ID.fullmatch(task_id) or not REPOSITORY_ID.fullmatch(repository_id) or pr_number < 1:
         raise Blocked("invalid task, repository, or pull request identity")
     if len(delivery_evidence.strip()) < 12 or len(delivery_evidence) > 500:
         raise Blocked("Oracle delivery evidence is required")
