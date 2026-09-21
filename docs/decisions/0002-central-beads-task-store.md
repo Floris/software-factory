@@ -1,6 +1,6 @@
 # ADR 0002: Use one factory Beads task store
 
-- Status: Accepted; manual cutover complete, unattended routing pending
+- Status: Superseded by ADR 0004; historical manual cutover record
 - Date: 2026-09-21
 
 ## Context

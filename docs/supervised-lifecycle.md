@@ -91,8 +91,8 @@ The Oracle does not start another writer or reviewer for that task during an
 invocation and confirms no existing task agent is active. Current manually
 created worktrees predate shared-lock participation, so the lock alone cannot
 prove inactivity. Stop if activity is uncertain. Record the connector query,
-exact SHA, runner result, and delivery observation in the central Bead. Keep
-the Bead, worktree, and local branch until delivery is verified. Do not infer
+exact SHA, runner result, and delivery observation in the central Issue. Keep
+the Issue, worktree, and local branch until delivery is verified. Do not infer
 successful cleanup from a missing ref without a completed durable record.
 
 Only exact `codex/<task-id>-*` task branches are in scope. Dolt information

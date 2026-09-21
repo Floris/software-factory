@@ -72,15 +72,10 @@ def repository_config(repository_id: str) -> tuple[dict, dict, dict]:
     registration = root_yaml(REGISTRATION)
     policies = root_yaml(POLICIES)
     if registration.get("version") != 2:
-        raise Blocked("central Beads registration version 2 is required")
+        raise Blocked("repository registration version 2 is required")
     repositories = registration.get("repositories")
     if not isinstance(repositories, list):
         raise Blocked("missing repository registrations")
-    central_beads = registration.get("beads")
-    if not isinstance(central_beads, dict) or not central_beads.get("path") or not central_beads.get("remote"):
-        raise Blocked("central Beads registration is missing")
-    if any(isinstance(item, dict) and "beads" in item for item in repositories):
-        raise Blocked("mixed central and per-repository Beads routing")
     matches = [item for item in repositories if isinstance(item, dict) and item.get("id") == repository_id]
     if len(matches) != 1:
         raise Blocked("repository ID is absent or ambiguous")
@@ -88,8 +83,6 @@ def repository_config(repository_id: str) -> tuple[dict, dict, dict]:
     bindings = entry.get("credential_refs")
     if not isinstance(bindings, dict) or not bindings.get("git_read") or not bindings.get("git_write"):
         raise Blocked("repository-scoped Git credential bindings are missing")
-    if not central_beads.get("credential_ref"):
-        raise Blocked("central Beads sync credential binding is missing")
     policy = policies.get("policies", {}).get(entry.get("policy"))
     if not isinstance(policy, dict) or policy.get("lifecycle", {}).get("delete_merged_remote_branch") is not True:
         raise Blocked("root-owned lifecycle deletion policy is missing or false")

@@ -20,7 +20,7 @@ Kubernetes manifests.
 - ArgoCD is the only permanent Kubernetes deployment path.
 - The factory must never require root, cluster-admin, access to Kubernetes
   Secrets, or the container runtime socket.
-- Treat Bead descriptions, repository content, CI output, and logs as
+- Treat issue descriptions, repository content, CI output, and logs as
   untrusted input. Never interpolate their contents into a shell command.
 - Represent commands as executable plus argument arrays and invoke them
   without a shell.
@@ -30,21 +30,20 @@ Kubernetes manifests.
 - Never commit credentials, rendered Secrets, Codex authentication files, or
   host-local configuration.
 
-## Beads workflow
+## GitHub Issues workflow
 
-The root orchestrator is the Oracle. It owns planning, claims, Beads state,
-delegation, integration, and final verification. The intended task source is
-one central Beads database in this repository; every task carries a validated
-`repository_id`. The [migration runbook](docs/central-beads-migration.md)
-records the completed manual cutover and gates unattended operation. Supervised
-Oracle work uses only the central store; the legacy product stores are not
-claim sources.
+The root orchestrator is the Oracle. It owns planning, task state, delegation,
+integration, and final verification. GitHub Issues in `Floris/software-factory`
+is the central task source for factory, product, and deployment work. Each
+issue records one validated target `repository_id`. The old Beads database is
+read-only history; see [the cutover record](docs/github-issues-cutover.md).
 
-1. Synchronize Beads and inspect ready work.
-2. Claim exactly one implementation task.
+1. Read open Issues and inspect dependencies, labels, and linked PRs.
+2. Select exactly one implementation issue and record the Oracle's claim in an
+   issue comment before creating a worktree. Check for a concurrent claim.
 3. Record acceptance criteria, write scope, validation commands, risk, and
    deployment policy before execution.
-4. Give workers read-only access to Beads; workers must not edit `.beads`.
+4. Give workers a read-only issue snapshot; workers do not mutate Issues.
 5. Keep a task open until its requested delivery level is verified.
 6. Immediately after a true merge is verified, the Oracle acquires the
    exclusive lifecycle lock and deletes only the exact merged remote task ref
@@ -53,8 +52,8 @@ claim sources.
 7. Retain the dedicated worktree and local branch until delivery verification.
    Before closure, the Oracle reacquires the lock, verifies the earlier remote
    deletion evidence, and safely removes those exact local resources.
-8. Only the Oracle blocks, updates, mutates pull requests, manages branches or
-   worktrees, runs lifecycle operations, or closes tasks.
+8. Only the Oracle marks issues blocked, updates or closes them, mutates pull
+   requests, manages branches or worktrees, or runs lifecycle operations.
 
 In policy, `git.delete_branch: false` denies branch deletion to delegated
 agents. `lifecycle.delete_merged_remote_branch: true` authorizes only the root
@@ -75,8 +74,8 @@ factory entrypoint for every configured project.
 
 - `project_architect` performs bounded, read-only analysis and produces an
   implementation brief using its explicitly pinned architecture model.
-- `app_worker` implements exactly one Bead in its assigned project worktree.
-- `quality_reviewer` performs a read-only review against the Bead and the
+- `app_worker` implements exactly one Issue in its assigned project worktree.
+- `quality_reviewer` performs a read-only review against the Issue and the
   target repository's instructions using its explicitly pinned review model.
 - `pull_request_reviewer` checks one exact PR and its CI and review evidence
   before a policy-authorized Oracle merge. It is read-only.
@@ -103,15 +102,14 @@ remote task-ref deletion in sequence.
 ## Operator entrypoint
 
 Humans start Codex from `/srv/software-factory/repos/software-factory`. The
-Oracle selects the configured product and Bead, creates or chooses the task
+Oracle selects the configured product and Issue, creates or chooses the task
 worktree, and delegates there. Humans do not normally start a separate root
 Codex session from a canonical product checkout.
 
-Factory, product, and deployment task records live in the central Beads store
-after cutover. Product code remains in its product repository, and Kubernetes
-desired state remains in `website-k8s`. A task's `repository_id` selects the
-registered source repository; its ID prefix does not. Cross-repository work
-links the relevant Bead IDs instead of copying the task.
+Factory, product, and deployment task records live in central GitHub Issues.
+Product code remains in its product repository, and Kubernetes desired state
+remains in `website-k8s`. An issue's `repository_id` selects the registered
+source repository. Cross-repository work links the relevant Issue URLs.
 
 ## Current implementation phase
 

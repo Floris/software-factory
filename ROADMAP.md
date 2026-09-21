@@ -1,6 +1,6 @@
 # Roadmap
 
-Status reviewed on 2026-09-21 against the VPS, repository state, Beads state,
+Status reviewed on 2026-09-21 against the VPS, repository state, task state,
 Git history, and host configuration. Checked items are verified complete.
 Unchecked items remain delivery work; their `Current` note records implemented
 foundations without treating them as an operational capability.
@@ -8,7 +8,7 @@ foundations without treating them as an operational capability.
 ## Phase 0 - Repository foundation
 
 - [x] Record architecture and security boundaries.
-- [x] Define Beads ownership and cross-repository linking.
+- [x] Define central task ownership and cross-repository linking.
 - [x] Add configuration examples.
 - [x] Define a neutral multi-repository component, package, and deployment
   routing contract.
@@ -20,8 +20,8 @@ foundations without treating them as an operational capability.
 
 - [x] Create a non-root factory user.
 - [x] Create protected repository, worktree, log, and runtime directories.
-- [ ] Install or verify Git, Codex CLI, Beads, and required project runtimes.
-  - Current: Git, Codex CLI, Beads, and kubectl are available to the factory;
+- [ ] Install or verify Git, Codex CLI, and required project runtimes.
+  - Current: Git, Codex CLI, and kubectl are available to the factory;
     Node.js and npm are not available to the `codex` user.
 - [ ] Authenticate each integration with its own least-privilege identity.
   - Current: Git remote access works, but repository-by-repository credential
@@ -30,22 +30,18 @@ foundations without treating them as an operational capability.
     multi-repository execution remains disabled while an account-wide
     bootstrap credential is usable or any required `credential_refs` entry is
     absent.
-- [x] Cut over supervised manual work to one central Beads database and remote.
-  - Evidence: the factory database and a fresh independent remote clone have
-    the same 24 issues, all with repository IDs. Seven dependency edges and
-    non-routing issue fields survived import. The central manifest remained
-    `codex:codex` mode `0600` after a successful pull/push cycle. The operator
-    accepted possible loss of changes held only in inaccessible legacy local
-    databases; the old factory database was retained intact.
-- [ ] Migrate host Beads routing and fault-test the trusted runner.
-  - Current: `/etc/software-factory/repositories.yaml` still describes the
-    legacy per-repository layout. No installed runner protects canonical writes
-    from a sandboxed agent. Unattended claims remain disabled.
+- [x] Move supervised task tracking to central GitHub Issues.
+  - Evidence: the remote Beads export held 38 regular tasks, 37 closed and one
+    open. Open epic `sf-evi` is now factory issue #15; closed records remain
+    historical. No Dolt manifest is needed for current task work.
+- [ ] Implement atomic unattended issue claiming and fault-test the trusted
+  runner. Issue comments coordinate attended Oracle work but are not a
+  multi-Oracle lock. Unattended claims remain disabled.
 - [ ] Register and preflight every opted-in product repository.
   - Current: the tracked contract supports one-to-many components, OCI package
     identities, and GitOps application mappings. Root-owned host registration,
-    exact remote/default-branch verification, central Beads
-    synchronization, operation-keyed credential references, and credential
+    exact remote/default-branch verification, central GitHub Issues access,
+    operation-keyed credential references, and credential
     audience checks remain operator work for each repository.
 
 ## Phase 2 - Manual single-task runner
@@ -72,7 +68,7 @@ foundations without treating them as an operational capability.
 - [x] Push factory-created branches with a dedicated Git identity.
   - Evidence: the `et-42p` product branch and linked deployment branch were
     authored and pushed by Software Factory, then safely removed after merge.
-- [x] Open pull requests with Bead and validation evidence.
+- [x] Open pull requests with task and validation evidence.
 - [ ] Observe CI without exposing Codex credentials to repository-controlled
   code.
   - Current: CI published the immutable `sha-9b1f244...` application image,
@@ -87,8 +83,8 @@ foundations without treating them as an operational capability.
 - [x] Consume immutable application image identifiers from successful CI.
   - Evidence: Expense Tracker CI publishes a full-commit SHA image and the DEV
     application and migration job use the same immutable tag.
-- [x] Create a linked deployment Bead in `website-k8s`.
-  - Evidence: `wk-6ac` links product task `et-42p` to the immutable merged
+- [x] Create a linked deployment task in `website-k8s`.
+  - Historical evidence: `wk-6ac` linked product task `et-42p` to the immutable merged
     application commit.
 - [x] Update deployment state through a separate pull request.
   - Evidence: website-k8s pull request #2 pinned the application and migration
@@ -119,14 +115,13 @@ foundations without treating them as an operational capability.
 
 ## Next milestone
 
-Replace the legacy host registration with the central contract, install the
-trusted non-root runner, and fault-test ownership and sandbox isolation before
-unattended claims. Then close the remaining repeatability gaps
+Remove the unused Beads host binding after the reviewed runner source is
+deployed. Implement atomic issue claims and a scoped Issues credential, then
+fault-test sandbox isolation before unattended claims. Close the remaining repeatability gaps
 in the manual runner: install a durable
 trusted Node.js runtime, record one structured worker result, and execute the
 configured validation profile from orchestration rather than an ad hoc shell.
-Implement and fault-test the canonical Beads ownership/mode preflight and
-postflight before unattended execution. Then configure the read-only
+Then configure the read-only
 Kubernetes observer and verify ArgoCD and workload health without access to
 Secrets. Register each opted-in repository in the root-owned host configuration
 and replace any account-wide bootstrap access with verified repository-scoped

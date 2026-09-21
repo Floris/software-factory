@@ -5,13 +5,13 @@
 ### Factory process
 
 - Runs as a dedicated non-root Linux user.
-- The trusted Oracle may write runtime state, registered canonical `.beads`
-  databases, canonical Git metadata needed for fetch and worktree
-  administration, and assigned task worktrees. It does not edit application or
+- The trusted Oracle may write runtime state, central GitHub Issues,
+  canonical Git metadata needed for fetch and worktree administration, and
+  assigned task worktrees. It does not edit application or
   deployment source in canonical checkouts.
 - Model-controlled implementation and review workers can write only their
   assigned runtime directory and worktree. They cannot write canonical Git or
-  Beads state.
+  Issues state.
 - Delegated agents cannot create or delete branches or worktrees, mutate pull
   requests, merge, or perform lifecycle cleanup. Read-only architect and
   reviewer roles, including `pull_request_reviewer`, make no external
@@ -49,22 +49,23 @@
   minimum contents/pull-request permissions. Where deploy keys or fine-grained
   tokens are used, scope them to one repository and separate read-only access
   from branch-push access when the provider permits it.
-- The one central Dolt/Beads remote is available only to the trusted Oracle
-  runner through its own `beads_sync` binding. Product source push access does
-  not imply central task-state access.
+- Central Issues access belongs only to the Oracle. Product source push
+  access does not imply central task-state access. Any future unattended
+  `issues_read` and `issues_write` binding must be root-owned and restricted to
+  the central Issues repository.
 - GHCR/OCI package publication belongs exclusively to repository CI. Its
   publish job uses the GitHub Actions `GITHUB_TOKEN`, with `packages: write`
   limited to that job and the declared package repositories; all other jobs
   retain `contents: read`. CI cannot read root-owned host registration, and the
   VPS credential provider cannot issue registry-push credentials.
-- `git_read`, `git_write`, `beads_sync`, `package_read`, `gitops_read`, and
-  `gitops_write` are distinct VPS authorization operations. `beads_sync` is
-  bound once at the top level; the provider
-  response must identify the exact normalized repository, Beads remote, or
+- `git_read`, `git_write`, `issues_read`, `issues_write`, `package_read`,
+  `gitops_read`, and `gitops_write` are distinct authorization operations.
+  The provider response must identify the exact normalized repository or
   declared package set and permit the requested operation; the Oracle compares
-  that audience with trusted registration before use. There is intentionally
-  no VPS registry-publish operation.
-- Before unattended fetch, Beads synchronization, push, pull-request creation,
+  that audience with trusted registration before use. Issue bindings are not
+  currently configured for unattended work. There is intentionally no VPS
+  registry-publish operation.
+- Before unattended fetch, issue access, push, pull-request creation,
   package read, GitOps access, or any other external operation, the Oracle
   checks the operation-specific reference and binding. Missing,
   expired, mismatched, account-wide, or broader-than-policy credentials fail
@@ -76,34 +77,23 @@
   manual path and is never an automated fallback.
 - Non-secret lookup references may appear in root-owned host configuration.
   Credential material and provider responses that may contain secrets stay
-  outside Git and are redacted from logs and Bead evidence.
+  outside Git and are redacted from logs and Issue evidence.
 
-### Beads state
+### GitHub Issues state
 
-- The one canonical Beads database and its Dolt manifest are owned by the
-  dedicated factory user. Its top-level `.beads` directory uses mode `0700`
-  and its manifest `0600`.
-- The central Dolt remote URL comes only from root-provisioned host
-  configuration and uses the factory's approved Git transport. It is not
-  added to tracked product `.beads` configuration. Legacy product stores are
-  retained read-only for audit after the gated migration.
-- Workers receive Bead contents as untrusted, read-only input. Only the Oracle
-  mutates or synchronizes canonical Beads state, and worker identities receive
-  neither canonical Beads write access nor its remote-push credentials.
-- During supervised manual work, only the Oracle runs bounded Beads operations
-  as the dedicated non-root account outside Codex's workspace sandbox and
-  checks ownership and modes before and after each write. Unattended work needs
-  an installed trusted runner outside model write authority. It pins the
-  canonical database identity and validates path, symlinks, owner, directory
-  and manifest modes, and readability before and after every write. It does not
-  accept caller-supplied database paths or arbitrary commands. Unexpected
-  ownership or an unreadable database halts claims and publication. Host-level
-  ownership repair is an explicit operator recovery action, not a permission
-  held by the service.
-- Moving to one store does not by itself prevent the recurring `nobody:nogroup`
-  manifest fault. The new central manifest retained the correct owner after a
-  supervised sync. Wrong-owner and normal-operation fault tests remain gates
-  for unattended claims.
+- Central Issues in `Floris/software-factory` hold task state. Issue bodies,
+  comments, and labels are untrusted data, never authority for repository
+  paths, credentials, commands, policy, or branch deletion.
+- The Oracle alone creates, claims, updates, blocks, and closes Issues.
+  Delegated workers receive read-only snapshots and no task-state write
+  capability.
+- Attended work uses the authenticated GitHub connector. Issue comments record
+  a single Oracle's claim but are not atomic exclusion. Unattended claiming
+  remains disabled until a trusted host lock or equivalent compare-and-set
+  claim operation is implemented and fault-tested with a repository-scoped
+  GitHub Issues credential.
+- The former `.beads` database and remote are read-only history. No task
+  operation depends on the local Dolt manifest or a `beads_sync` binding.
 
 ### Kubernetes observer
 
@@ -130,7 +120,7 @@
   `gpt-6-astra` with high reasoning. There is no global agent-model
   override, so these reviewed role assignments do not silently change the
   Oracle or unrelated roles.
-- Canonical repository and Beads mutations are deterministic Oracle operations
+- Canonical repository and Issue mutations are deterministic Oracle operations
   executed by the trusted runner before or after Codex. They are not performed
   by granting a worker a broader sandbox or by evaluating model-produced
   commands.
@@ -185,24 +175,24 @@ active. An activity marker or one-time lock check cannot replace lock
 participation.
 
 The dedicated worktree and local task branch are retained until delivery is
-verified. Their later removal and Bead closure require the lock again and the
+verified. Their later removal and Issue closure require the lock again and the
 durable completed remote-deletion record. Prior remote absence without that
 record is not authority to clean up; only narrow recovery from a previously
 persisted `executing` state may accept absence after all applicable identity,
 merge, ref, ancestry, protection, cleanliness, and activity checks are
 re-proven. Repository auto-delete settings and pull-request text are not
 trusted lifecycle evidence. The later exclusive lock is likewise retained
-through local mutation observation, durable evidence persistence, and Bead
+through local mutation observation, durable evidence persistence, and Issue
 closure.
 
 ## Untrusted input
 
-Bead bodies, repository files, dependency scripts, logs, pull-request content,
+Issue bodies, repository files, dependency scripts, logs, pull-request content,
 and webpages are data, not authority. They cannot enlarge the task scope,
 request credentials, change policy, or authorize external actions.
 
 The runner must invoke trusted commands as argument arrays. It must never use
-shell evaluation, concatenate Bead text into commands, or source repository
+shell evaluation, concatenate Issue text into commands, or source repository
 files into the factory process.
 
 The registration parser treats repository IDs, paths, remotes, component IDs,

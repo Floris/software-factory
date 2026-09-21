@@ -14,12 +14,11 @@ auto-discovery:
    configuration. A mismatch or ambiguous repository identity blocks.
 3. The product repository adds repository-specific `AGENTS.md` instructions
    that preserve its invariants and factory boundaries.
-4. The Oracle verifies that the central Beads database is synchronized and
-   readable through the trusted host runner. The registered repository ID can
-   then be assigned to its tasks. No product Beads database is initialized.
+4. The Oracle verifies that the central GitHub Issues repository is available
+   and the target repository ID is registered. No product task database is initialized.
 5. The repository adds bounded validation that is safe on untrusted source.
    Host configuration represents each invocation as an executable followed by
-   an argument array; no command comes from a Bead or is passed to a shell.
+   an argument array; no command comes from an issue or is passed to a shell.
 6. The product maps each deployable component to its OCI package repository or
    repositories. CI must validate pull requests and, after merge, publish each
    affected package as `sha-<full 40-character commit>` with OCI source and
@@ -37,24 +36,28 @@ auto-discovery:
 The singular `deployment` field remains accepted for an existing
 one-component version 1 entry. New multi-component entries use `deployments`;
 specifying both is invalid. Missing AGENTS guidance, unavailable or overly
-broad credentials, invalid command arrays, unsynchronized Beads, duplicate
+broad credentials, invalid command arrays, unavailable central Issues, duplicate
 package identities, dangling component references, or a mutable tag policy all
 fail closed before claim, push, publication, or deployment.
 
-For every external operation, unattended preflight selects the operation key
-from the target repository's `credential_refs`, resolves that non-secret key
-through the trusted provider, and verifies the returned authorization audience
-before use:
+For repository, package, and GitOps operations, unattended preflight selects
+the operation key from the target repository's `credential_refs`, resolves that
+non-secret key through the trusted provider, and verifies its authorization
+audience before use:
 
 - source fetch uses `git_read`; branch push and pull-request mutation use
   `git_write` for that exact source repository;
-- canonical task-state pull/push uses the one top-level `beads_sync` binding
-  for the central Beads remote;
 - GHCR image verification uses `package_read` constrained to that product's
   declared GHCR package set; and
 - GitOps observation and GitOps branch/pull-request mutation use `gitops_read`
   and `gitops_write` from the target `website-k8s` registration, never from the
   product registration.
+
+Supervised task-state reads and writes use the authenticated GitHub connector.
+Unattended issue access requires a separately reviewed, root-owned binding
+scoped to the central Issues repository; it cannot reuse a product's Git
+credential. Unattended issue claims remain disabled until that binding and an
+atomic coordination mechanism are implemented and tested.
 
 GHCR publication is not a VPS credential operation. Before trusting a release,
 the Oracle verifies that repository CI used its own GitHub Actions
@@ -75,9 +78,9 @@ or deployment delivery waits for the component/package mapping migration.
 
 ## Task intake
 
-A human or approved planning process creates a Bead in the central factory
-store. Its `metadata.repository_id` must identify exactly one registered
-repository. The task must state:
+A human or approved planning process creates an Issue in the central factory
+repository. Its body must name exactly one registered `repository_id`. The
+issue must state:
 
 - the desired outcome and acceptance criteria;
 - dependencies and affected repository;
@@ -89,18 +92,22 @@ repository. The task must state:
 
 ## Implementation
 
-1. The Oracle pulls the selected repository and central Beads state.
-2. List ready work and select exactly one task.
-3. Claim the task through the Oracle.
-4. The Oracle creates `codex/<bead-id>-<slug>` in a dedicated worktree.
-5. Construct the Codex prompt from trusted factory instructions plus the Bead
+1. The Oracle refreshes the selected repository and central GitHub Issues.
+2. List open, unblocked work and select exactly one task.
+3. Check current issue comments for an active claim and record an Oracle claim
+   with identity, time, repository ID, and worktree. An issue comment is not an
+   atomic multi-Oracle lock; unattended claiming remains disabled until a
+   trusted lock or equivalent compare-and-set mechanism is implemented.
+4. The Oracle creates `codex/issue-<number>-<slug>` in a dedicated worktree
+   named `issue-<number>`.
+5. Construct the Codex prompt from trusted factory instructions plus the Issue
    as clearly delimited untrusted task data.
 6. Run Codex with workspace-write, no broad host access, and structured output.
 7. Execute validation commands from repository configuration as executable and
-   argument arrays, without shell interpretation and never from Bead text.
+   argument arrays, without shell interpretation and never from Issue text.
 8. Request read-only review when the configured risk policy requires it.
 9. The Oracle pushes the branch and opens a pull request containing evidence,
-   the Bead ID, and a statement that the Oracle will delete the exact remote
+   the Issue URL, and a statement that the Oracle will delete the exact remote
    task ref after a verified true merge. A GitHub auto-delete setting may
    exist, but the factory neither enables nor trusts it as lifecycle evidence.
 
@@ -133,14 +140,15 @@ activity marker or one-time check of the lock is not sufficient on its own.
 1. CI validates the merged application commit.
 2. CI publishes every affected component package with a
    `sha-<full 40-character commit>` tag and OCI source/revision metadata.
-3. The Oracle creates or claims a linked deployment Bead in `website-k8s`.
+3. The Oracle creates or selects a linked central deployment Issue with target
+   `repository_id: website-k8s`.
 4. A dedicated change updates every workload image mapped to the affected
    component, including matching jobs and scheduled jobs, to that exact tag.
 5. The GitOps pull request is reviewed and merged under the environment policy.
 6. ArgoCD reconciles the desired state.
 7. A read-only observer checks ArgoCD health, pod readiness, relevant logs, and
    public health endpoints.
-8. The deployment Bead and then the product Bead become eligible for local
+8. The deployment Issue and then the product Issue become eligible for local
    cleanup and closure after verification; their merged remote task refs were
    already handled by the merge-time lifecycle phase.
 
@@ -210,12 +218,12 @@ unprovable check blocks.
 
 ## Delivery verification, local cleanup, and closure
 
-The Bead remains open, and the dedicated worktree and local task branch remain
+The Issue remains open, and the dedicated worktree and local task branch remain
 available, until its requested delivery level is verified. The Oracle then:
 
 1. reacquires the exclusive repository/task lifecycle lock and loads the exact
    durable record created during merge-time deletion, retaining the lock
-   through mutation-result observation, durable evidence persistence, and Bead
+   through mutation-result observation, durable evidence persistence, and Issue
    closure;
 2. accepts remote absence only when the deletion step is `completed`, or under
    the narrow `executing` recovery rule above after all applicable checks are
@@ -229,7 +237,7 @@ available, until its requested delivery level is verified. The Oracle then:
 5. deletes only the recorded exact local task branch using a separate durable
    step after proving it is neither shared, default, protected, updated,
    active, nor ambiguously owned; and
-6. records final evidence and closes the Bead only after both local cleanup
+6. records final evidence and closes the Issue only after both local cleanup
    steps complete.
 
 Every mutation records `executing` before invocation and `completed` only after
@@ -251,9 +259,9 @@ transition to `completed`; otherwise cleanup blocks.
 - Ambiguous scope, missing credentials, or required human decisions block the
   task instead of expanding authority.
 - An invalid repository/component graph, canonical checkout mismatch,
-  unsynchronized Beads database, unavailable repository-scoped credential, or
+  unavailable central Issues, unavailable repository-scoped credential, or
   non-immutable package mapping blocks work before any external mutation.
-- Failed deployment blocks the deployment Bead and never triggers a production
+- Failed deployment blocks the deployment Issue and never triggers a production
   promotion.
 - Failed or ambiguous remote deletion or local cleanup keeps the lifecycle lock
   while the Oracle safely records the failure and completed-step state, then
