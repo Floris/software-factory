@@ -2,7 +2,8 @@
 
 `Floris/software-factory` Issues is the single task source for factory,
 product, and deployment work. Use the free GitHub Issues features. The former
-Beads store is historical data, never a claim or routing source.
+Beads store and its remote refs were retired and removed; they are not a claim
+or routing source.
 
 ## Task contract
 

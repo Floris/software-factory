@@ -35,8 +35,9 @@ Kubernetes manifests.
 The root orchestrator is the Oracle. It owns planning, task state, delegation,
 integration, and final verification. GitHub Issues in `Floris/software-factory`
 is the central task source for factory, product, and deployment work. Each
-issue records one validated target `repository_id`. The old Beads database is
-read-only history; see [the cutover record](docs/github-issues-cutover.md).
+issue records one validated target `repository_id`. The former Beads store and
+its remote refs were retired; see
+[the cutover record](docs/github-issues-cutover.md).
 
 1. Read open Issues and inspect dependencies, labels, and linked PRs.
 2. Select exactly one implementation issue and record the Oracle's claim in an

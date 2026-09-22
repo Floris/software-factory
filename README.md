@@ -12,9 +12,10 @@ state.
 The repository currently contains the architecture, security boundaries,
 central GitHub Issues task model, workflow, roadmap, and example
 configuration. The manual task-store cutover is complete: Issues in this
-repository hold new factory, product, and deployment work. The old Beads
-store is historical. Unattended claims remain gated by a trusted atomic
-coordination mechanism, scoped Issues access, and runner fault tests.
+repository hold new factory, product, and deployment work. The former Beads
+store and its remote refs were removed. Unattended claims remain gated by a
+trusted atomic coordination mechanism, scoped Issues access, and runner fault
+tests.
 Executable orchestration tooling will be implemented and tested on the Linux
 VPS, where Codex CLI, systemd, Git credentials, and the restricted K3s
 observer identity are available.

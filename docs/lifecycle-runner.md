@@ -56,7 +56,9 @@ task is not locally cleaned merely because its GitOps PR merged.
 
 ## Historical Dolt refs
 
-The previous `refs/dolt/data` and Dolt information refs are historical task
-data after the GitHub Issues cutover. This task-branch runner never targets
-them. Their retention or removal requires a separate reviewed maintenance
-decision with exact-ref evidence.
+The previous `refs/dolt/data` and Dolt information refs were removed on
+2026-09-22 under the operator-authorized, exact-ref maintenance recorded in
+[issue #25](https://github.com/Floris/software-factory/issues/25). This
+task-branch runner did not target them and must never do so. Future
+non-task-ref cleanup requires a separate reviewed decision with exact-ref
+evidence.

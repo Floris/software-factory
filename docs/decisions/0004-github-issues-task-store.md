@@ -21,9 +21,12 @@ promotion audit boundary, and root-owned host configuration remains the
 repository and credential authority. A GitHub issue cannot supply commands,
 paths, permissions, or policy authority.
 
-The 37 closed Beads remain archived. The one open Bead, `sf-evi`, maps to
-factory issue #15. No future task is created in Beads. In supervised sessions,
-the Oracle uses the existing authenticated GitHub connector. Unattended task
+The 37 closed Beads were initially archived; their local archives and selected
+remote refs were later removed at the operator's request on 2026-09-22, as
+recorded in [issue #25](https://github.com/Floris/software-factory/issues/25).
+The one open Bead, `sf-evi`, maps to factory issue #15. No future task is
+created in Beads. In supervised sessions, the Oracle uses the existing
+authenticated GitHub connector. Unattended task
 claiming remains disabled until a bounded, tested coordination mechanism and
 least-privilege Issues credential exist.
 
