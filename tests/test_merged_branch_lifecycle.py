@@ -156,6 +156,52 @@ class LifecycleTests(unittest.TestCase):
             self.assertEqual(lifecycle.cleanup_local(self.task, self.repository_id, 7,
                                                      "Merged code verified by Oracle")["local_branch_delete"], "completed")
 
+    def test_legacy_suffix_worktree_is_cleaned_by_exact_branch_identity(self) -> None:
+        legacy_path = self.worktree.with_name(f"{self.task}-hotfix")
+        git(self.repo, "worktree", "move", str(self.worktree), str(legacy_path))
+        self.worktree = legacy_path
+        with self.patches():
+            state = lifecycle.process(self.task, self.repository_id, 7)
+            self.assertEqual(state["worktree"], str(legacy_path))
+            self.assertEqual(state["local_head"], self.head)
+            state = lifecycle.cleanup_local(self.task, self.repository_id, 7,
+                                            "Merged code verified by Oracle")
+            self.assertEqual(state["local_branch_delete"], "completed")
+        self.assertFalse(legacy_path.exists())
+
+    def test_legacy_local_branch_at_exact_merge_is_cleaned(self) -> None:
+        git(self.worktree, "reset", "--hard", self.merge)
+        with self.patches():
+            state = lifecycle.process(self.task, self.repository_id, 7)
+            self.assertEqual(state["head"], self.head)
+            self.assertEqual(state["local_head"], self.merge)
+            self.assertEqual(state["remote_delete"], "completed")
+            state = lifecycle.cleanup_local(self.task, self.repository_id, 7,
+                                            "Merged code verified by Oracle")
+            self.assertEqual(state["local_branch_delete"], "completed")
+
+    def test_legacy_identity_rejects_other_path_or_local_commit(self) -> None:
+        other_path = self.worktree.with_name("unrelated-worktree")
+        git(self.repo, "worktree", "move", str(self.worktree), str(other_path))
+        with self.patches():
+            with self.assertRaisesRegex(lifecycle.Blocked, "dedicated path"):
+                lifecycle.process(self.task, self.repository_id, 7)
+        git(self.repo, "worktree", "move", str(other_path), str(self.worktree))
+        git(self.worktree, "commit", "--allow-empty", "-m", "unmerged local change")
+        with self.patches():
+            with self.assertRaisesRegex(lifecycle.Blocked, "local task branch moved"):
+                lifecycle.process(self.task, self.repository_id, 7)
+        self.assertEqual(lifecycle.remote_sha(self.repo, "refs/heads/codex/issue-14-work"), self.head)
+
+    def test_local_head_must_stay_fixed_after_remote_deletion(self) -> None:
+        with self.patches():
+            lifecycle.process(self.task, self.repository_id, 7)
+            git(self.worktree, "reset", "--hard", self.merge)
+            with self.assertRaisesRegex(lifecycle.Blocked, "local task branch moved"):
+                lifecycle.cleanup_local(self.task, self.repository_id, 7,
+                                        "Merged code verified by Oracle")
+            self.assertTrue(self.worktree.exists())
+
     def test_dirty_worktree_blocks_local_cleanup(self) -> None:
         with self.patches():
             lifecycle.process(self.task, self.repository_id, 7)

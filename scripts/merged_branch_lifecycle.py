@@ -234,7 +234,9 @@ def worktree_for(checkout: Path, workspaces: Path, task_id: str, branch: str, he
     if len(matches) != 1:
         raise Blocked("task branch must have exactly one dedicated worktree")
     path = matches[0]
-    if path.is_symlink() or not path.is_dir() or path.parent != workspaces or path.name != task_id.replace(".", "-"):
+    task_slug = task_id.replace(".", "-")
+    if (path.is_symlink() or not path.is_dir() or path.parent != workspaces
+            or (path.name != task_slug and not path.name.startswith(f"{task_slug}-"))):
         raise Blocked("task worktree is outside the registered dedicated path")
     if run(["git", "status", "--porcelain"], path).stdout:
         raise Blocked("task worktree is dirty")
@@ -290,7 +292,10 @@ def verify(
     path = None
     if require_worktree:
         workspaces = Path(registration["workspace_root"]) / state["repository_id"]
-        path = worktree_for(checkout, workspaces, state["task_id"], state["branch"], state["head"])
+        local_head = state.get("local_head", state["head"])
+        if local_head not in (state["head"], state["merge"]):
+            raise Blocked("recorded local task head is not the PR head or merge")
+        path = worktree_for(checkout, workspaces, state["task_id"], state["branch"], local_head)
         if str(path) != state["worktree"]:
             raise Blocked("dedicated worktree identity changed")
     return path, task_sha
@@ -363,9 +368,13 @@ def process(task_id: str, repository_id: str, pr_number: int) -> dict:
                     or not SHA.fullmatch(head) or not SHA.fullmatch(merge)):
                 raise Blocked("pull request does not identify an exact task head")
             workspaces = Path(registration["workspace_root"]) / repository_id
-            worktree = worktree_for(Path(entry["path"]), workspaces, task_id, branch, head)
+            local_head = local_ref_sha(Path(entry["path"]), branch)
+            if local_head not in (head, merge):
+                raise Blocked("local task branch moved")
+            worktree = worktree_for(Path(entry["path"]), workspaces, task_id, branch, local_head)
             state = {"task_id": task_id, "repository_id": repository_id, "pr_number": pr_number,
-                     "branch": branch, "head": head, "merge": merge, "default": default,
+                     "branch": branch, "head": head, "local_head": local_head,
+                     "merge": merge, "default": default,
                      "pr_base": pr_base,
                      "worktree": str(worktree), "remote_delete": "pending",
                      "worktree_remove": "pending", "local_branch_delete": "pending"}
@@ -464,7 +473,7 @@ def cleanup_local(task_id: str, repository_id: str, pr_number: int, delivery_evi
         branch_phase = state.get("local_branch_delete", "pending")
         if branch_phase == "pending":
             verify(state, entry, registration, require_remote=False, require_worktree=False)
-            if local_ref_sha(checkout, state["branch"]) != state["head"]:
+            if local_ref_sha(checkout, state["branch"]) != state.get("local_head", state["head"]):
                 raise Blocked("local task branch moved or disappeared")
             state["local_branch_delete"] = "executing"
             persist(state_file, state)
@@ -473,7 +482,7 @@ def cleanup_local(task_id: str, repository_id: str, pr_number: int, delivery_evi
             verify(state, entry, registration, require_remote=False, require_worktree=False)
             local_sha = local_ref_sha(checkout, state["branch"])
             if local_sha is not None:
-                if local_sha != state["head"]:
+                if local_sha != state.get("local_head", state["head"]):
                     raise Blocked("local task branch moved")
                 run(["git", "branch", "-d", "--", state["branch"]], checkout)
             if local_ref_sha(checkout, state["branch"]) is not None:

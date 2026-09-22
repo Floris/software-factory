@@ -70,8 +70,13 @@ For local cleanup after completed remote deletion, `branch_info` is `null`:
 the remote branch must already be absent. The runner accepts only this schema,
 the exact requested task/PR/repository,
 and evidence no older than 15 minutes. It checks the registered Git remote,
-clean canonical checkout and exact dedicated worktree, live default and task
+clean canonical checkout and unique dedicated worktree, live default and task
 refs, PR head and merge identity, true merge second parent, and ancestry. It
+accepts a legacy worktree directory named either for the task or with a
+`<task-id>-` prefix, but only inside the registered repository workspace. Its
+local branch must point to the PR head or to that PR's exact true merge commit;
+the observed local SHA and worktree path are recorded durably and must not
+change before cleanup.
 records the PR's historical base separately from the repository's current
 default branch, so a PR merged into `master` before a rename can qualify only
 when that exact merge is contained in the current `main` history. It
@@ -96,5 +101,6 @@ the Issue, worktree, and local branch until delivery is verified. Do not infer
 successful cleanup from a missing ref without a completed durable record.
 
 Only exact `codex/<task-id>-*` task branches are in scope. Dolt information
-branches, `refs/dolt/data`, default branches, unmerged PRs, dirty or moved
-worktrees, and branches with ambiguous ownership stay untouched.
+branches, `refs/dolt/data`, default branches, unmerged PRs, dirty worktrees,
+worktrees outside the registered task prefix, and branches with ambiguous
+ownership stay untouched.
