@@ -70,7 +70,7 @@ Directory rules:
   synchronization, and worktree administration. Its default branch stays
   clean. Only deterministic Oracle operations may write its Git metadata.
   Implementation and review workers receive no canonical checkout write
-  access. The former `.beads` directory is retained only as history.
+  access. The former `.beads` directory was removed after the Issues cutover.
 - `worktrees/<repository>/<issue-id>` is the only writable source workspace for
   an implementation task. One worktree belongs to one Issue and one branch.
 - `runtime` contains resumable execution metadata and locks, never durable work

@@ -92,8 +92,9 @@
   remains disabled until a trusted host lock or equivalent compare-and-set
   claim operation is implemented and fault-tested with a repository-scoped
   GitHub Issues credential.
-- The former `.beads` database and remote are read-only history. No task
-  operation depends on the local Dolt manifest or a `beads_sync` binding.
+- The former `.beads` database and selected remote refs were removed after the
+  Issues cutover. No task operation depends on a Dolt manifest or a
+  `beads_sync` binding.
 
 ### Kubernetes observer
 
