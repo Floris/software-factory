@@ -115,7 +115,7 @@
   bootstrap roots with only that task's worktree and runtime directory. A
   worker must not inherit write access to every task worktree.
 - Project-scoped agent definitions pin each role independently: `app_worker`
-  uses `gpt-5.6-sol` with medium reasoning, `project_architect` uses
+  uses `gpt-6-sol` with extra-high reasoning, `project_architect` uses
   `gpt-6-astra` with high reasoning, and `quality_reviewer` uses
   `gpt-6-astra` with extra-high reasoning. `pull_request_reviewer` uses
   `gpt-6-astra` with high reasoning. There is no global agent-model
