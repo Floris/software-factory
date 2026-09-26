@@ -58,6 +58,14 @@ no inclusion. No annotations, environment, condition messages, arbitrary raw
 objects, logs, URLs or credentials reach the client. Literal token reflection
 in an otherwise valid projected field fails closed.
 
+Kubernetes [typed collections](https://kubernetes.io/docs/reference/using-api/api-concepts/#collections)
+can omit `kind` and `apiVersion` from their items. On every list page, the gateway
+requires the collection's kind and API version to match the fixed requested
+endpoint. It derives only absent item type fields from that validated type in
+a copy of each item; explicitly conflicting fields, including `null`, fail
+closed. Named-object identity, namespace, name, UID and controller ownership
+checks still apply without inference outside the typed-list boundary.
+
 There is one serial Accept=no broker and one collector at a time. Collection
 starts are at least one second apart; early requests receive `rate_limited`.
 The root-installed script collects in a fixed isolated Python subprocess with
