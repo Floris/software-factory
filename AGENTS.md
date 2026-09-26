@@ -53,8 +53,9 @@ its remote refs were retired; see
 7. Retain the dedicated worktree and local branch until delivery verification.
    Before closure, the Oracle reacquires the lock, verifies the earlier remote
    deletion evidence, and safely removes those exact local resources.
-8. Only the Oracle marks issues blocked, updates or closes them, mutates pull
-   requests, manages branches or worktrees, or runs lifecycle operations.
+8. Only the Oracle marks issues blocked, updates or closes them, manages
+   branches or worktrees, or runs lifecycle operations. It controls pull-request
+   mutations, with the single authorized reviewer merge exception below.
 
 In policy, `git.delete_branch: false` denies branch deletion to delegated
 agents. `lifecycle.delete_merged_remote_branch: true` authorizes only the root
@@ -78,27 +79,43 @@ factory entrypoint for every configured project.
 - `app_worker` implements exactly one Issue in its assigned project worktree.
 - `quality_reviewer` performs a read-only review against the Issue and the
   target repository's instructions using its explicitly pinned review model.
-- `pull_request_reviewer` checks one exact PR and its CI and review evidence
-  before a policy-authorized Oracle merge. It is read-only.
+- `pull_request_reviewer` checks one exact PR and its CI and review evidence.
+  Its filesystem stays read-only. It defaults to `review_only`; an explicit
+  authorized `review_and_merge` assignment permits one conditional true merge
+  through the GitHub connector.
 
 The role files pin their own model and reasoning effort. There is no global
 agent-model override: the Oracle remains independently configurable, while
 each delegated role keeps a reviewed capability and cost profile. Delegated
-roles never create or delete branches or worktrees, mutate pull requests, or
-run lifecycle cleanup. Architects and reviewers make no external mutations,
-and all delegated roles run only trusted validation commands supplied by the
-Oracle or host configuration.
+roles never create or delete branches or worktrees or run lifecycle cleanup.
+Architects, implementation workers and quality reviewers make no external
+mutations. The PR reviewer has only the single merge exception described here;
+it cannot make other PR mutations. All delegated roles run only trusted
+validation commands supplied by the Oracle or host configuration.
 
 Every delegated agent must read the target repository's `AGENTS.md`. Product
 invariants stay in the product repository instead of being copied into these
 generic factory roles.
 
-For a registered repository with root-owned `git.merge_pull_request: true`,
-the Oracle may request a `pull_request_reviewer` verdict, independently refresh
-the PR identity and required checks, and perform a true merge. A false or
-missing value still requires explicit human approval. The reviewer never
-receives merge or lifecycle authority; the Oracle handles the merge and exact
-remote task-ref deletion in sequence.
+Only the Oracle verifies root-owned `git.merge_pull_request` policy. A true
+value permits a merge; a false or missing value requires concrete human approval
+for the exact repository, PR and head SHA. A READY verdict never grants authority.
+The Oracle may merge after an independent refresh, or durably assign one merge
+attempt to `pull_request_reviewer` with a unique assignment ID, exact base/head
+identities, full head SHA and policy/approval evidence. Missing mode or
+authorization defaults to `review_only`. In `review_and_merge`, the reviewer
+must find READY and immediately refresh identity, required checks/reviews,
+protection and mergeability before the single `expected_head_sha`-bound true
+merge. The Oracle excludes concurrent mergers and reconciles ambiguous outcomes
+before any new assignment; no blind second attempt is allowed.
+
+After returning the exact merge result, the reviewer becomes inactive. The
+Oracle independently verifies the true merge and immediately runs the locked
+exact remote task-ref lifecycle procedure, retaining local resources until
+delivery. The [workflow](docs/workflow.md) defines the assignment and recovery
+contract. This is a future newly loaded role capability, not a hot reload of
+already active read-only instructions. The adoption PR still requires approval
+under the currently active role and host policy.
 
 ## Operator entrypoint
 

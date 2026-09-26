@@ -41,6 +41,8 @@ Human
 | Kubernetes desired state | `website-k8s` Git history |
 | Runtime reconciliation | ArgoCD |
 | Factory behavior and policy | This repository |
+| PR merge authorization | Root-owned host policy or exact human approval verified by the Oracle |
+| Delegated merge assignment and attempt | Oracle-owned durable runtime record |
 | Workspace routing | Workspace-root `AGENTS.md` and `agents-md` |
 | Observer status interface | This repository's immutable installed gateway |
 | Allowed observer routes/connection | Root-owned host policy and systemd credentials |
@@ -55,6 +57,20 @@ Live installation and isolation remain separate verification gates. Kubernetes
 RBAC and desired state stay in `website-k8s`; routing carries no current image,
 replica or rollout state. [ADR 0005](decisions/0005-observer-gateway.md) records
 the credential boundary.
+
+The existing `pull_request_reviewer` keeps a read-only filesystem and defaults
+to `review_only`. A newly loaded trusted role may receive one Oracle-authorized
+`review_and_merge` assignment for an exact repository/PR/head. Only the Oracle
+verifies root-owned merge policy or concrete human approval and durably records
+the unique assignment and reserved attempt. READY and fresh GitHub identity,
+checks/reviews, protection and mergeability are required before the reviewer
+uses a conditional true-merge connector call. The Oracle excludes concurrent
+mergers, owns ambiguity reconciliation, independently verifies the returned
+merge and immediately handles exact remote cleanup after reviewer inactivity.
+Branch/worktree management and all lifecycle authority remain with the Oracle;
+local resources remain until delivery. [ADR 0006](decisions/0006-reviewer-merge-delegation.md)
+records this bounded delegation. Role-file adoption is not hot reload, live
+merge proof, host-policy activation or unattended runner/lock implementation.
 
 ## VPS filesystem layout
 

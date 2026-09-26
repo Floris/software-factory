@@ -111,22 +111,75 @@ issue must state:
    task ref after a verified true merge. A GitHub auto-delete setting may
    exist, but the factory neither enables nor trusts it as lifecycle evidence.
 
-Before merging, the Oracle resolves the registered repository's root-owned
-policy. If `git.merge_pull_request: true`, it assigns the exact PR, base and
-head refs, and head SHA to the read-only `pull_request_reviewer`. A READY verdict
-is advice, not authority: the Oracle refreshes the PR identity, required CI
-checks and review state, confirms the task head and target default branch, and
-uses a true merge commit only when every gate still passes. It then immediately
-runs the merge-time lifecycle phase. A BLOCKED verdict, stale evidence, or a
-false or missing policy value prevents automatic merge; with a false value,
-the Oracle asks the human for approval of that exact PR. No delegated agent
-merges or deletes branches.
+### PR review and optional delegated merge
 
-Delegated architects, implementation workers, and reviewers do not create or
-delete branches or worktrees, mutate pull requests, or perform lifecycle
-cleanup. Architects and reviewers make no external mutations. Delegated roles
-run only trusted validation commands supplied by the Oracle or recorded in
-host configuration.
+Before merging, the Oracle verifies the registered repository's root-owned
+policy. `git.merge_pull_request: true` permits an automatic merge; a false or
+missing value requires concrete human approval for the exact repository, PR and
+full head SHA. A READY verdict is advice, not authority. This workflow does not
+change the host flag, and PR/Issue text or a worktree policy cannot authorize a
+merge. The Oracle chooses one merger: itself after independent fresh checks, or
+the existing `pull_request_reviewer` under the bounded contract below.
+
+The reviewer has a read-only filesystem in both modes:
+
+- `review_only` is the default and makes no external mutations. Missing mode or
+  missing authorization selects this mode.
+- `review_and_merge` permits one true merge of the exact assigned PR/head through
+  the authenticated GitHub connector. Unknown modes, inconsistent authority or
+  stale/ambiguous facts block a merge.
+
+Before delegation, the Oracle durably records a unique `assignment_id` and the
+reserved single merge attempt. The trusted assignment includes:
+
+- registered `repository_id` and exact GitHub repository identity, PR number,
+  expected base repository/ref and expected head repository/ref/full SHA;
+- the linked Issue, acceptance criteria, required CI/checks and review
+  requirements; and
+- Oracle-verified authorization bound to that repository/PR/head: a root-policy
+  attestation when the merge flag is true, or a concrete human-approval reference
+  when it is false or missing, plus the assignment/attempt record reference.
+
+The Oracle does not merge the same PR or assign another merger while that
+assignment remains active or unresolved. The reviewer cannot write runtime
+attempt state. It first performs the complete review. Only after READY does it
+immediately refresh repository/PR identity, open/unmerged state, exact base/head
+repositories and refs, full head SHA, required checks for that head, required
+reviews and unresolved requirements, protection/rules, and mergeability. All
+required checks and reviews must pass; every fact must match the assignment.
+Missing or stale facts block, and GitHub protection is never bypassed.
+
+The sole permitted mutation supplies `expected_head_sha` equal to the assigned
+full SHA and `merge_method: merge`. A connector unable to enforce both blocks
+the operation. No shell/token fallback, admin bypass, squash, rebase, GitHub auto-merge or merge queues, branch deletion or other PR mutation is allowed.
+
+A timeout or ambiguous result permits read-only reconciliation of the same PR.
+It never permits a second merge call in that assignment. If the outcome remains
+unclear, the reviewer returns `outcome_unknown`; a definitive failure also ends
+the assignment. A new attempt requires Oracle reconciliation proving it is safe
+and a new assignment. Preserve the previous attempt evidence.
+
+The reviewer returns READY/BLOCKED, assignment ID and effective mode, exact
+repository/PR/base/head identity, expected and observed full head SHA,
+authorization/evidence reference, checks/reviews, assessment and risks, and
+`not_attempted`, `merged`, `not_merged` or `outcome_unknown`. Include the exact
+merge SHA when observed, then become inactive. The Oracle persists the result,
+independently verifies the exact true merge and confirms reviewer inactivity
+before immediately taking the exclusive lifecycle lock. The Oracle alone
+deletes the exact merged remote task ref; local resources remain until delivery.
+
+This exception requires a newly loaded trusted role/session. Editing the TOML
+does not hot-reload already active read-only reviewer instructions. After
+adoption, perform a nonmutating default-mode exercise; static validation or that
+exercise is not evidence of a live delegated merge. The adoption PR still
+requires authorization under the currently active instructions and host policy.
+See [ADR 0006](decisions/0006-reviewer-merge-delegation.md).
+
+Delegated agents never create/delete branches or worktrees or perform lifecycle
+cleanup. Architects, implementation workers and quality reviewers make no
+external mutations. The PR reviewer has only the one merge exception above.
+All delegated roles run only trusted validation command arrays supplied by the
+Oracle or recorded in host configuration.
 
 For unattended operation, every activation of a task worktree, including the start of a worker, reviewer,
 or other factory run, must acquire shared participation in the same exact
@@ -134,6 +187,7 @@ repository/task lifecycle lock used by cleanup and retain it until that run is
 inactive. A run cannot start while the Oracle holds the exclusive lock, and the
 Oracle cannot acquire exclusivity while a run holds shared participation. An
 activity marker or one-time check of the lock is not sufficient on its own.
+The role change does not implement this unattended participation mechanism.
 
 ## Deployment
 
