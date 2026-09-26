@@ -1,0 +1,42 @@
+[Unit]
+Description=Software Factory credential-isolated observer
+Requires=software-factory-observer.socket
+After=software-factory-observer.socket
+
+[Service]
+Type=exec
+DynamicUser=yes
+User=software-factory-observer
+ExecStart=/usr/bin/python3 -I -B -S /usr/local/lib/software-factory/observer_gateway.py
+LoadCredential=observer-token:/etc/software-factory/observer/token
+LoadCredential=observer-connection:/etc/software-factory/observer-connection.json
+LoadCredential=observer-policy:/etc/software-factory/observer-policy.json
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+ProtectProc=invisible
+ProcSubset=pid
+RestrictNamespaces=yes
+RestrictSUIDSGID=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+UMask=0077
+LimitCORE=0
+LimitNOFILE=64
+CPUQuota=10%
+MemoryMax=128M
+TasksMax=8
+KillMode=control-group
+TimeoutStartSec=5
+TimeoutStopSec=2
+Restart=no
+StandardOutput=null
+StandardError=null

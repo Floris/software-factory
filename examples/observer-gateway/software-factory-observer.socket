@@ -1,0 +1,17 @@
+[Unit]
+Description=Software Factory bounded observer socket
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+[Socket]
+ListenStream=/run/software-factory-observer/status.sock
+Accept=no
+Backlog=8
+SocketUser=root
+SocketGroup=codex
+SocketMode=0660
+DirectoryMode=0750
+RemoveOnStop=yes
+
+[Install]
+WantedBy=sockets.target
