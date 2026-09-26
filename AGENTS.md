@@ -102,6 +102,13 @@ remote task-ref deletion in sequence.
 
 ## Operator entrypoint
 
+Repository-scoped Codex skills live in `.agents/skills/`. Use `factory-project`
+when selecting, planning, or onboarding a new or different project, and
+`factory-task` when implementing or resuming one scoped Issue after project
+selection. Read the selected `SKILL.md` before following its workflow. Skills
+route to the existing policy and agent roles; they do not grant permissions or
+replace the target repository's instructions.
+
 Humans start Codex from `/srv/software-factory/repos/software-factory`. The
 Oracle selects the configured product and Issue, creates or chooses the task
 worktree, and delegates there. Humans do not normally start a separate root

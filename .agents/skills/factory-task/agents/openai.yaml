@@ -1,0 +1,3 @@
+interface:
+  display_name: "Factory Task"
+  short_description: "Voer één factory-Issue uit tot geverifieerde oplevering"
