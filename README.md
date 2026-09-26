@@ -161,6 +161,8 @@ codex
 - [Architecture](docs/architecture.md)
 - [Workflow](docs/workflow.md)
 - [Security model](docs/security-model.md)
+- [Restricted observer gateway and operator installation](docs/observer-gateway.md)
+- [Observer credential isolation decision](docs/decisions/0005-observer-gateway.md)
 - [GitHub Issues model](docs/issues-model.md)
 - [Task-store cutover](docs/github-issues-cutover.md)
 - [Roadmap](ROADMAP.md)

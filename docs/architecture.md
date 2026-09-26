@@ -42,6 +42,19 @@ Human
 | Runtime reconciliation | ArgoCD |
 | Factory behavior and policy | This repository |
 | Workspace routing | Workspace-root `AGENTS.md` and `agents-md` |
+| Observer status interface | This repository's immutable installed gateway |
+| Allowed observer routes/connection | Root-owned host policy and systemd credentials |
+
+Read-only verification uses the [observer gateway](observer-gateway.md), not a
+token or kubeconfig supplied to the factory. An on-demand systemd socket passes
+requests to a distinct non-root DynamicUser, whose isolated bounded collector
+reads private credentials and projects only allowlisted per-app status. The
+operator installs/renews this host boundary. Same-UID product processes receive
+the same deliberately limited summary; it does not establish Oracle identity.
+Live installation and isolation remain separate verification gates. Kubernetes
+RBAC and desired state stay in `website-k8s`; routing carries no current image,
+replica or rollout state. [ADR 0005](decisions/0005-observer-gateway.md) records
+the credential boundary.
 
 ## VPS filesystem layout
 

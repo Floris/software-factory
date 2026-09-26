@@ -98,10 +98,26 @@
 
 ### Kubernetes observer
 
-- Is limited to opted-in DEV namespaces.
-- May get, list, watch, and read pod logs.
-- Cannot read Secrets or mutate workloads.
-- Does not receive `exec` permission in the initial design.
+- The dedicated RBAC identity is owned by `website-k8s` and limited to opted-in
+  DEV namespaces and named ArgoCD Applications. It cannot read Secrets, mutate
+  resources or exec. Its broader workload/log read rights are not exposed by
+  the factory interface.
+- The factory holds no token or kubeconfig. A distinct non-root DynamicUser
+  gateway receives private systemd LoadCredential copies from operator-owned
+  sources and exposes only bounded per-application status projections.
+- Root-installed immutable code and root-owned routing policy authorize fixed
+  GETs. Verified TLS, controller UID chains, strict EOF framing, bounded
+  collection/output and an absolute subprocess deadline fail closed.
+- Parent and collector disable process dumping before private reads. No token
+  enters argv/environment/output; no logs, raw objects or upstream error bodies
+  reach the factory. The operator renews the existing token source manually and
+  refreshes the service snapshot; no admin fallback or automatic renewal exists.
+- Socket metadata limits access to the codex UID/group boundary. Product code
+  sharing that UID can read the same limited summary and compete for service;
+  this is not role authentication. Source credential and service memory remain
+  outside that UID's access. Operator installation/isolation and live status
+  evidence are mandatory before claiming capability; see the
+  [observer gateway runbook](observer-gateway.md).
 
 ## Codex boundary
 

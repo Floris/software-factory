@@ -1,0 +1,5 @@
+{
+  "version": 1,
+  "server": "https://api.example.invalid:6443",
+  "ca_data": "REPLACE_WITH_BASE64_ENCODED_VERIFIED_PEM_CA"
+}

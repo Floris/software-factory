@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "applications": [
+    {
+      "id": "sample-app",
+      "argocd_namespace": "argocd",
+      "namespace": "sample-dev",
+      "workloads": [
+        {"kind": "Deployment", "name": "sample-web"},
+        {"kind": "Job", "name": "sample-migrate"}
+      ]
+    },
+    {
+      "id": "sample-observer",
+      "argocd_namespace": "argocd",
+      "namespace": "argocd",
+      "workloads": []
+    }
+  ]
+}
