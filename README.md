@@ -123,6 +123,23 @@ also enforce that delegated agents cannot create or delete branches or
 worktrees, mutate pull requests, or run lifecycle cleanup; those operations
 belong to the Oracle.
 
+Repository-scoped skills under [`.agents/skills/`](.agents/skills/) make these
+workflows selectable in `/skills` and available through normal automatic skill
+selection:
+
+- [`factory-project`](.agents/skills/factory-project/SKILL.md) selects, plans or
+  onboards a project using the reviewed host registration.
+- [`factory-task`](.agents/skills/factory-task/SKILL.md) implements or resumes
+  one scoped central Issue with the configured agent roles and delivery gates.
+
+For example, enter `$factory-project Ik wil aan een nieuw project werken` or
+`$factory-task Voer issue #123 uit` in Codex. Keep the Oracle session at the
+factory entrypoint so these skills and the project-scoped agent roles are
+available while it delegates into product worktrees. They are scoped to this
+repository, not installed globally or copied to product repositories. Codex
+detects skill changes automatically; restart it if a new skill does not appear.
+The `/agent` or `/subagents` menu shows spawned threads, not role definitions.
+
 The example policies intentionally combine `git.delete_branch: false` with
 `lifecycle.delete_merged_remote_branch: true`. The first keeps deletion out of
 delegated Git actions. The second grants only the root Oracle permission to
