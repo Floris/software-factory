@@ -32,8 +32,26 @@ def uid(number):
     return f'00000000-0000-0000-0000-{number:012d}'
 
 
+def api_version(kind):
+    return {'Application': 'argoproj.io/v1alpha1', 'Pod': 'v1',
+            'Job': 'batch/v1', 'CronJob': 'batch/v1'}.get(kind, 'apps/v1')
+
+
+def collection(kind, items=(), continuation=''):
+    return {'kind': kind + 'List', 'apiVersion': api_version(kind),
+            'items': list(items), 'metadata': {'continue': continuation}}
+
+
+def wire_item(obj):
+    obj = deepcopy(obj)
+    obj.pop('kind')
+    obj.pop('apiVersion')
+    return obj
+
+
 def fixture(kind, resource_name, number, parent=None, namespace='sample-dev'):
-    obj = {'kind': kind, 'metadata': {'name': resource_name, 'namespace': namespace,
+    obj = {'kind': kind, 'apiVersion': api_version(kind),
+           'metadata': {'name': resource_name, 'namespace': namespace,
                                      'uid': uid(number), 'generation': 1},
            'spec': {'template': {'spec': {'containers': [{'name': 'web', 'image': 'example.invalid/team/web:sha-test'}]}}},
            'status': {'observedGeneration': 1, 'replicas': 1, 'readyReplicas': 1}}
@@ -63,8 +81,8 @@ class Transport:
         self.calls = []
         self.data = {gateway.api_path('Application', 'argocd', 'sample-app'): application(),
                      gateway.api_path('Deployment', 'sample-dev', 'sample-web'): workload or fixture('Deployment', 'sample-web', 2),
-                     gateway.api_path('ReplicaSet', 'sample-dev') + '?limit=64': {'kind': 'ReplicaSetList', 'items': list(children)},
-                     gateway.api_path('Pod', 'sample-dev') + '?limit=64': {'kind': 'PodList', 'items': list(pods)}}
+                     gateway.api_path('ReplicaSet', 'sample-dev') + '?limit=64': collection('ReplicaSet', children),
+                     gateway.api_path('Pod', 'sample-dev') + '?limit=64': collection('Pod', pods)}
 
     def __call__(self, path, absent=False):
         self.calls.append((path, absent))
@@ -436,6 +454,173 @@ class ProtocolAndPolicy(unittest.TestCase):
                 client.trusted_path(target, socket_path=True)
 
 
+class TypedCollections(unittest.TestCase):
+    def test_wire_items_support_deployment_controller_chain(self):
+        rs = wire_item(fixture('ReplicaSet', 'sample-rs', 3, ('Deployment', 'sample-web', 2)))
+        stale_rs = wire_item(fixture('ReplicaSet', 'stale-rs', 4, ('Deployment', 'sample-web', 99)))
+        pods = [wire_item(fixture('Pod', 'sample-pod', 5, ('ReplicaSet', 'sample-rs', 3))),
+                wire_item(fixture('Pod', 'stale-pod', 6, ('ReplicaSet', 'stale-rs', 4))),
+                wire_item(fixture('Pod', 'wrong-uid', 7, ('ReplicaSet', 'sample-rs', 99)))]
+        transport = Transport(children=[rs, stale_rs], pods=pods)
+        projected = gateway.snapshot(APP, transport)['workloads'][0]
+        self.assertEqual(projected['controllers'], [{'name': 'sample-rs', 'uid': uid(3)}])
+        self.assertEqual([pod['name'] for pod in projected['pods']], ['sample-pod'])
+        self.assertEqual(projected['pods'][0]['controller'],
+                         {'kind': 'ReplicaSet', 'name': 'sample-rs', 'uid': uid(3)})
+        self.assertTrue(projected['pods'][0]['ready'])
+        self.assertNotIn(SECRET, gateway.encoded(projected).decode())
+        self.assertEqual(len(transport.calls), 4)
+
+    def test_wire_items_support_cronjob_and_direct_controller_chains(self):
+        for kind in ('CronJob', 'ReplicaSet', 'StatefulSet', 'Job'):
+            with self.subTest(kind=kind):
+                app = deepcopy(APP)
+                app['workloads'] = [{'kind': kind, 'name': 'sample-work'}]
+                transport = Transport()
+                transport.data[gateway.api_path(kind, 'sample-dev', 'sample-work')] = fixture(kind, 'sample-work', 2)
+                parent = (kind, 'sample-work', 2)
+                if kind == 'CronJob':
+                    job = wire_item(fixture('Job', 'sample-child', 3, parent))
+                    stale_job = wire_item(fixture('Job', 'stale-child', 4, ('CronJob', 'sample-work', 99)))
+                    transport.data[gateway.api_path('Job', 'sample-dev') + '?limit=64'] = collection('Job', [job, stale_job])
+                    parent = ('Job', 'sample-child', 3)
+                good_pod = wire_item(fixture('Pod', 'sample-pod', 5, parent))
+                stale_pod = wire_item(fixture('Pod', 'stale-pod', 6, (parent[0], parent[1], 99)))
+                transport.data[gateway.api_path('Pod', 'sample-dev') + '?limit=64'] = collection('Pod', [good_pod, stale_pod])
+                projected = gateway.snapshot(app, transport)['workloads'][0]
+                self.assertEqual([pod['name'] for pod in projected['pods']], ['sample-pod'])
+                self.assertEqual(projected['pods'][0]['controller'],
+                                 {'kind': parent[0], 'name': parent[1], 'uid': uid(parent[2])})
+                if kind == 'CronJob':
+                    self.assertEqual(projected['controllers'], [{'name': 'sample-child', 'uid': uid(3)}])
+
+    def test_absent_partial_and_explicit_item_metadata_are_copied(self):
+        for kind in ('Pod', 'ReplicaSet', 'Job'):
+            for omit in ((), ('kind',), ('apiVersion',), ('kind', 'apiVersion')):
+                with self.subTest(kind=kind, omit=omit):
+                    raw = fixture(kind, 'sample-item', 3)
+                    for field in omit:
+                        raw.pop(field)
+                    page = collection(kind, [raw])
+                    before = deepcopy(page)
+                    result = gateway.objects(lambda path: page, kind, 'sample-dev')
+                    self.assertEqual(result, [fixture(kind, 'sample-item', 3)])
+                    self.assertEqual(page, before)
+                    self.assertIsNot(result[0], raw)
+                    gateway.identity(result[0], kind, 'sample-dev', 'sample-item')
+
+    def test_empty_and_paginated_typed_collections(self):
+        for kind in ('Pod', 'ReplicaSet', 'Job'):
+            with self.subTest(kind=kind):
+                empty = collection(kind)
+                empty.pop('metadata')  # ListMeta remains optional without pagination.
+                self.assertEqual(gateway.objects(lambda path: empty, kind, 'sample-dev'), [])
+                first = collection(kind, [wire_item(fixture(kind, 'sample-one', 3))], 'next/+?=')
+                second = collection(kind, [wire_item(fixture(kind, 'sample-two', 4))])
+                pages = [first, second]
+                before = deepcopy(pages)
+                calls = []
+
+                def get(path):
+                    calls.append(path)
+                    return pages[len(calls) - 1]
+
+                result = gateway.objects(get, kind, 'sample-dev')
+                self.assertEqual([item['metadata']['name'] for item in result], ['sample-one', 'sample-two'])
+                self.assertTrue(all(item['kind'] == kind and item['apiVersion'] == api_version(kind)
+                                    for item in result))
+                self.assertEqual(calls, [gateway.api_path(kind, 'sample-dev') + '?limit=64',
+                                         gateway.api_path(kind, 'sample-dev') + '?limit=64&continue=next%2F%2B%3F%3D'])
+                self.assertEqual(pages, before)
+
+    def test_collection_type_metadata_must_match_endpoint_on_every_page(self):
+        for kind in ('Pod', 'ReplicaSet', 'Job'):
+            for field, bad in (('kind', None), ('kind', 'List'), ('kind', 'SecretList'),
+                               ('apiVersion', None), ('apiVersion', ''), ('apiVersion', 'other/v1'),
+                               ('apiVersion', 'v1' if api_version(kind) != 'v1' else 'apps/v1')):
+                with self.subTest(kind=kind, field=field, bad=bad):
+                    invalid = collection(kind)
+                    invalid[field] = bad
+                    for pages in ([invalid], [collection(kind, continuation='next'), invalid]):
+                        with self.assertRaises(gateway.Denied) as failure:
+                            gateway.objects(lambda path: pages.pop(0), kind, 'sample-dev')
+                        self.assertEqual(failure.exception.code, 'unavailable')
+            for field in ('kind', 'apiVersion'):
+                with self.subTest(kind=kind, missing=field):
+                    page = collection(kind)
+                    page.pop(field)
+                    with self.assertRaises(gateway.Denied):
+                        gateway.objects(lambda path: page, kind, 'sample-dev')
+
+    def test_conflicting_item_type_metadata_and_nonobjects_are_denied(self):
+        for kind in ('Pod', 'ReplicaSet', 'Job'):
+            for field, value in (('kind', None), ('kind', ''), ('kind', 'Secret'), ('kind', True),
+                                 ('apiVersion', None), ('apiVersion', ''), ('apiVersion', 'other/v1'),
+                                 ('apiVersion', ['v1'])):
+                with self.subTest(kind=kind, field=field, value=value):
+                    raw = wire_item(fixture(kind, 'sample-item', 3))
+                    raw[field] = value
+                    page = collection(kind, [raw])
+                    before = deepcopy(page)
+                    with self.assertRaises(gateway.Denied):
+                        gateway.objects(lambda path: page, kind, 'sample-dev')
+                    self.assertEqual(page, before)
+            for raw in (None, [], 'Pod', True, 1):
+                with self.subTest(kind=kind, item=raw), self.assertRaises(gateway.Denied):
+                    gateway.objects(lambda path: collection(kind, [raw]), kind, 'sample-dev')
+
+    def test_malformed_list_metadata_and_items_are_denied(self):
+        for page in (None, [], 'PodList', {'kind': 'PodList', 'apiVersion': 'v1'},
+                     dict(collection('Pod'), items=None), dict(collection('Pod'), items={}),
+                     dict(collection('Pod'), metadata=None), dict(collection('Pod'), metadata=[]),
+                     collection('Pod', continuation=None), collection('Pod', continuation=True),
+                     collection('Pod', continuation='x' * 2049)):
+            with self.subTest(page=page), self.assertRaises(gateway.Denied):
+                gateway.objects(lambda path: page, 'Pod', 'sample-dev')
+
+    def test_wire_items_keep_namespace_name_and_uid_validation(self):
+        for kind, changes in (('ReplicaSet', {'namespace': 'other'}),
+                               ('Pod', {'namespace': 'other'}),
+                               ('ReplicaSet', {'name': '../escape'}),
+                               ('Pod', {'name': '../escape'}),
+                               ('ReplicaSet', {'uid': None}), ('Pod', {'uid': 'invalid-uid'})):
+            with self.subTest(kind=kind, changes=changes):
+                rs = wire_item(fixture('ReplicaSet', 'sample-rs', 3, ('Deployment', 'sample-web', 2)))
+                pod = wire_item(fixture('Pod', 'sample-pod', 5, ('ReplicaSet', 'sample-rs', 3)))
+                (rs if kind == 'ReplicaSet' else pod)['metadata'].update(changes)
+                with self.assertRaises(gateway.Denied):
+                    gateway.snapshot(APP, Transport(children=[rs], pods=[pod]))
+
+    def test_named_objects_do_not_inherit_collection_type(self):
+        for kind in ('Application', 'Deployment'):
+            for changes in ({'kind': None}, {'kind': 'Pod'}, {'name': 'other'},
+                            {'namespace': 'other'}, {'uid': 'invalid-uid'}, {'kind': 'missing'}):
+                with self.subTest(kind=kind, changes=changes):
+                    transport = Transport()
+                    path = gateway.api_path(kind, 'argocd' if kind == 'Application' else 'sample-dev',
+                                            'sample-app' if kind == 'Application' else 'sample-web')
+                    raw = transport.data[path]
+                    if 'kind' in changes:
+                        if changes['kind'] == 'missing':
+                            raw.pop('kind')
+                        else:
+                            raw['kind'] = changes['kind']
+                    else:
+                        raw['metadata'].update(changes)
+                    with self.assertRaises(gateway.Denied):
+                        gateway.snapshot(APP, transport)
+
+    def test_wire_items_reject_invalid_controller_identity(self):
+        for changes in ({'uid': 'invalid-uid'}, {'name': '../escape'}, {'kind': None},
+                        {'controller': 1}):
+            with self.subTest(changes=changes):
+                rs = wire_item(fixture('ReplicaSet', 'sample-rs', 3, ('Deployment', 'sample-web', 2)))
+                pod = wire_item(fixture('Pod', 'sample-pod', 5, ('ReplicaSet', 'sample-rs', 3)))
+                pod['metadata']['ownerReferences'][0].update(changes)
+                with self.assertRaises(gateway.Denied):
+                    gateway.snapshot(APP, Transport(children=[rs], pods=[pod]))
+
+
 class ProjectionAndTransport(unittest.TestCase):
     def test_owner_uid_chains_filter_same_namespace_and_raw_secrets(self):
         rs = fixture('ReplicaSet', 'sample-web-rs', 3, ('Deployment', 'sample-web', 2))
@@ -466,7 +651,7 @@ class ProjectionAndTransport(unittest.TestCase):
                 transport.data[gateway.api_path(kind, 'sample-dev', 'sample-work')] = workload
                 if kind == 'CronJob':
                     job = fixture('Job', 'sample-child', 3, parent)
-                    transport.data[gateway.api_path('Job', 'sample-dev') + '?limit=64'] = {'kind': 'JobList', 'items': [job]}
+                    transport.data[gateway.api_path('Job', 'sample-dev') + '?limit=64'] = collection('Job', [job])
                     parent = ('Job', 'sample-child', 3)
                 pod = fixture('Pod', 'sample-pod', 5, parent)
                 transport.data[gateway.api_path('Pod', 'sample-dev') + '?limit=64']['items'] = [pod]
@@ -514,8 +699,8 @@ class ProjectionAndTransport(unittest.TestCase):
                 pods[0]['metadata']['ownerReferences'][0]['annotation'] = SECRET
                 transport = Transport()
                 transport.data[gateway.api_path(kind, 'sample-dev', 'sample-work')] = fixture(kind, 'sample-work', 2)
-                transport.data[gateway.api_path(child_kind, 'sample-dev') + '?limit=64'] = {'kind': child_kind + 'List', 'items': children}
-                transport.data[gateway.api_path('Pod', 'sample-dev') + '?limit=64'] = {'kind': 'PodList', 'items': pods}
+                transport.data[gateway.api_path(child_kind, 'sample-dev') + '?limit=64'] = collection(child_kind, children)
+                transport.data[gateway.api_path('Pod', 'sample-dev') + '?limit=64'] = collection('Pod', pods)
                 result = gateway.snapshot(app, transport)['workloads'][0]
                 self.assertEqual({p['name']: p['controller'] for p in result['pods']}, {
                     'pod-one': {'kind': child_kind, 'name': 'sample-one', 'uid': uid(3)},
@@ -536,7 +721,7 @@ class ProjectionAndTransport(unittest.TestCase):
                     cronjob['spec']['suspend'] = suspend
                     cronjob['status']['active'] = active
                     transport.data[gateway.api_path('CronJob', 'sample-dev', 'sample-cron')] = cronjob
-                    transport.data[gateway.api_path('Job', 'sample-dev') + '?limit=64'] = {'kind': 'JobList', 'items': []}
+                    transport.data[gateway.api_path('Job', 'sample-dev') + '?limit=64'] = collection('Job')
                     result = gateway.snapshot(app, transport)['workloads'][0]
                     self.assertEqual(result['suspend'], suspend)
                     self.assertEqual(result['status']['active'], len(active))
@@ -563,14 +748,14 @@ class ProjectionAndTransport(unittest.TestCase):
         calls = []
         def get(path):
             calls.append(path)
-            return {'kind': 'PodList', 'items': [], 'metadata': {'continue': str(len(calls))}}
+            return collection('Pod', continuation=str(len(calls)))
         with self.assertRaises(gateway.Denied) as failure:
             gateway.objects(get, 'Pod', 'sample-dev')
         self.assertEqual(failure.exception.code, 'limit_exceeded')
         self.assertEqual(len(calls), 4)
         self.assertEqual(calls[1], '/api/v1/namespaces/sample-dev/pods?limit=64&continue=1')
         with self.assertRaises(gateway.Denied):
-            gateway.objects(lambda path: {'kind': 'PodList', 'items': [{}] * 65}, 'Pod', 'sample-dev')
+            gateway.objects(lambda path: collection('Pod', [{}] * 65), 'Pod', 'sample-dev')
         with self.assertRaises(gateway.Denied):
             gateway.strict_json(b'x' * (gateway.BODY_LIMIT + 1))
 

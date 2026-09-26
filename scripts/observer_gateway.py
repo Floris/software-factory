@@ -285,16 +285,30 @@ def api_path(kind, namespace, resource_name=None):
 def objects(get, kind, namespace):
     result, seen = [], set()
     continuation = ''
+    resource_path = api_path(kind, namespace)
+    # The fixed endpoint determines the collection and item type, not the body.
+    version = '/'.join(resource_path.split('/')[2:4]) if resource_path.startswith('/apis/') else 'v1'
     for _ in range(PAGE_LIMIT):
-        path = api_path(kind, namespace) + f'?limit={PAGE_SIZE}'
+        path = resource_path + f'?limit={PAGE_SIZE}'
         if continuation:
             path += '&continue=' + quote(continuation, safe='')
         page = get(path)
-        require(page.get('kind') == kind + 'List' and isinstance(page.get('items'), list))
+        require(isinstance(page, dict) and page.get('kind') == kind + 'List'
+                and page.get('apiVersion') == version and isinstance(page.get('items'), list))
         require(len(page['items']) <= PAGE_SIZE, 'limit_exceeded')
-        result.extend(page['items'])
+        for raw in page['items']:
+            require(isinstance(raw, dict))
+            require(('kind' not in raw or raw['kind'] == kind)
+                    and ('apiVersion' not in raw or raw['apiVersion'] == version))
+            # Typed-list wire items may omit TypeMeta; never alter the response.
+            item = dict(raw)
+            item.setdefault('kind', kind)
+            item.setdefault('apiVersion', version)
+            result.append(item)
         require(len(result) <= OBJECT_LIMIT, 'limit_exceeded')
-        continuation = page.get('metadata', {}).get('continue', '')
+        metadata = page.get('metadata', {})
+        require(isinstance(metadata, dict))
+        continuation = metadata.get('continue', '')
         require(isinstance(continuation, str) and len(continuation) <= 2048)
         if not continuation:
             return result
