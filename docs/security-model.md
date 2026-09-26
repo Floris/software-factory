@@ -105,6 +105,17 @@
 - The factory holds no token or kubeconfig. A distinct non-root DynamicUser
   gateway receives private systemd LoadCredential copies from operator-owned
   sources and exposes only bounded per-application status projections.
+- Copy validation accepts only private owner modes without an access ACL, or
+  the root-owned systemd ACL granting read/traverse solely to root and the
+  explicit non-root service UID. ACL mask bits in mode `0550`/`0440` do not
+  imply owning-group access: owning-group and other ACL rights must be zero.
+  Extra principals, ACL writes, malformed/inconsistent ACLs and lookup permission
+  failures are denied. Absent/unsupported ACLs permit only the private-mode
+  fallback. Metadata/ACL checks and bounded reads use the same opened inode,
+  with symlink and unexpected-type rejection before reading credential bytes.
+  Operator metadata verifiers reuse the installed validator with the verified
+  service UID rather than the root caller's UID. Root-only sources and
+  factory-denied credential/process access remain required.
 - Root-installed immutable code and root-owned routing policy authorize fixed
   GETs. Verified TLS, controller UID chains, strict EOF framing, bounded
   collection/output and an absolute subprocess deadline fail closed.

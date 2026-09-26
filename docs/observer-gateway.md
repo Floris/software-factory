@@ -95,10 +95,23 @@ The immutable unit binds three LoadCredential sources:
 - `observer-policy`: `/etc/software-factory/observer-policy.json`.
 
 Connection and policy are non-secret, but their original parent need not be
-traversable by DynamicUser. The service reads only private read-only `0400`
-copies in the fixed systemd credential directory, verifying owner, type, size
-and mode. The operator verifies original source ownership/nonwritability; the
-service cannot inspect root-private source parents. The root-owned unit and
+traversable by DynamicUser. The service validates copies in the fixed systemd
+credential directory before reading bytes. It accepts either root/service-owned
+private directories `0500`/`0700` and files `0400` without an access ACL, or the
+root-owned systemd 255 layout: directory `0550`, files `0440`, and exactly five
+Linux access ACL entries. Those entries grant owner and the one named service
+UID `r-x` on the directory or `r--` on files, with the same mask and zero rights
+for owning group and other. The group mode bits represent the ACL mask; they
+do not grant the owning group access. Extra principals, ACL write/special bits,
+wrong IDs, malformed ACLs and mask/mode mismatches are denied. Only explicit
+absent/unsupported ACL results permit the private-mode fallback; permission
+and other lookup failures fail closed.
+
+The directory and fixed relative filenames are opened without following
+symlinks. Descriptor-based type, owner, mode, ACL and size checks precede bounded
+reads from the same file inode. Nonblocking file opens prevent an unexpected
+FIFO from stalling validation. The operator verifies original source ownership
+and nonwritability; the service cannot inspect root-private source parents. The root-owned unit and
 systemd copies establish that provenance. Collector argv contains only fixed
 code arguments; its environment contains only the credential-directory path,
 never the token. The token's JWT subject, namespace, ServiceAccount name and
@@ -130,8 +143,16 @@ These steps belong to the human operator, never to the Oracle or a worker:
    LoadCredential copy refreshes; the socket remains the activation entrypoint.
 5. Check the service UID differs from codex, no supplementary codex group,
    protected source/copy/socket metadata, disabled dumping, hardening and absence
-   of credential access by codex/products. Test generic errors for expired and
-   wrong tokens using only private operator facilities. Verify fresh per-app
+   of credential access by codex/products. A private operator verifier must use
+   `credential_metadata(fd, service_uid, directory=False)` from the reviewed,
+   frozen installed gateway for each opened copy (`directory=True` for the
+   directory). Bind the captured service UID to the running PID and its start
+   time and verify that identity remains stable around the checks. Pass that
+   verified non-root UID explicitly, even when the verifier runs as root;
+   never substitute the verifier's effective UID or weaken the ACL check.
+   The reusable validator reads only metadata and no credentials at import.
+   Test generic errors for expired and wrong tokens using only private operator
+   facilities. Verify fresh per-app
    status through the installed client as non-root; never hand a token or admin
    context to the factory. Record sanitized evidence only.
 
