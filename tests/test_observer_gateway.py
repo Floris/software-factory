@@ -1,12 +1,14 @@
 """Offline synthetic fixtures only: no installed config, token or API access."""
 import base64
 from copy import deepcopy
+import errno
 import json
 import os
 from pathlib import Path
 import socket
 import ssl
 import stat
+import struct
 import subprocess
 import tempfile
 import threading
@@ -75,6 +77,298 @@ def jwt(**changes):
     claims.update(changes)
     payload = base64.urlsafe_b64encode(json.dumps(claims).encode()).rstrip(b'=').decode()
     return 'eyJhbGciOiJSUzI1NiJ9.' + payload + '.c3ludGhldGljLW5vdC1hLXNpZ25hdHVyZQ'
+
+
+SERVICE_UID = 61867
+UNDEFINED_ID = 0xffffffff
+
+
+def credential_acl(directory=False, entries=None, version=2):
+    access = 5 if directory else 4
+    if entries is None:
+        entries = [(1, access, UNDEFINED_ID), (2, access, SERVICE_UID),
+                   (4, 0, UNDEFINED_ID), (16, access, UNDEFINED_ID),
+                   (32, 0, UNDEFINED_ID)]
+    return struct.pack('<I', version) + b''.join(struct.pack('<HHI', *entry) for entry in entries)
+
+
+class CredentialMetadata(unittest.TestCase):
+    def validate(self, mode, acl, owner=0, directory=False, service_uid=SERVICE_UID):
+        info = SimpleNamespace(st_uid=owner, st_mode=mode)
+        lookup = {'side_effect': acl} if isinstance(acl, Exception) else {'return_value': acl}
+        with patch.object(gateway.os, 'fstat', return_value=info) as metadata, \
+                patch.object(gateway.os, 'getxattr', **lookup) as xattr:
+            result = gateway.credential_metadata(17, service_uid, directory)
+            metadata.assert_called_once_with(17)
+            xattr.assert_called_once_with(17, 'system.posix_acl_access')
+            self.assertIs(result, info)
+
+    def test_diagnosed_root_owned_acl_and_root_operator_explicit_uid(self):
+        with patch.object(gateway.os, 'geteuid', return_value=0) as caller_uid, \
+                patch.object(gateway.os, 'read') as read:
+            self.validate(stat.S_IFDIR | 0o550, credential_acl(True), directory=True)
+            self.validate(stat.S_IFREG | 0o440, credential_acl())
+            caller_uid.assert_not_called()
+            read.assert_not_called()
+
+    def test_private_layout_only_for_absent_or_unsupported_acl(self):
+        for error in (errno.ENODATA, errno.ENOTSUP, errno.EOPNOTSUPP):
+            for owner in (0, SERVICE_UID):
+                for directory, mode in ((True, 0o500), (True, 0o700), (False, 0o400)):
+                    with self.subTest(error=error, owner=owner, mode=mode):
+                        self.validate((stat.S_IFDIR if directory else stat.S_IFREG) | mode,
+                                      OSError(error, 'synthetic'), owner, directory)
+            for directory, mode in ((True, 0o550), (False, 0o440), (True, 0o750), (False, 0o404)):
+                with self.subTest(error=error, mode=mode), self.assertRaises(gateway.Denied):
+                    self.validate((stat.S_IFDIR if directory else stat.S_IFREG) | mode,
+                                  OSError(error, 'synthetic'), directory=directory)
+
+    def test_lookup_and_stat_failures_never_allow_private_mode_fallback(self):
+        for error in (errno.EACCES, errno.EPERM, errno.EIO, errno.EINVAL):
+            with self.subTest(error=error), self.assertRaises(gateway.Denied):
+                self.validate(stat.S_IFREG | 0o400, OSError(error, 'synthetic'))
+        with patch.object(gateway.os, 'fstat', side_effect=OSError(errno.EBADF, 'synthetic')), \
+                patch.object(gateway.os, 'getxattr') as xattr, self.assertRaises(gateway.Denied):
+            gateway.credential_metadata(17, SERVICE_UID)
+        xattr.assert_not_called()
+
+    def test_wrong_identity_owner_type_mode_and_special_bits_are_denied(self):
+        for expected_uid in (0, -1, True, '61867', UNDEFINED_ID, UNDEFINED_ID + 1, SERVICE_UID + 1):
+            with self.subTest(uid=expected_uid), self.assertRaises(gateway.Denied):
+                self.validate(stat.S_IFREG | 0o440, credential_acl(), service_uid=expected_uid)
+        for owner in (1000, SERVICE_UID):
+            with self.subTest(owner=owner), self.assertRaises(gateway.Denied):
+                self.validate(stat.S_IFREG | 0o440, credential_acl(), owner=owner)
+        with self.assertRaises(gateway.Denied):
+            self.validate(stat.S_IFREG | 0o400, OSError(errno.ENODATA, 'synthetic'), owner=1000)
+        for kind in (stat.S_IFLNK, stat.S_IFIFO, stat.S_IFSOCK, stat.S_IFCHR, stat.S_IFBLK, stat.S_IFDIR):
+            with self.subTest(kind=kind), self.assertRaises(gateway.Denied):
+                self.validate(kind | 0o440, credential_acl())
+        for directory, mode in ((False, 0o400), (False, 0o460), (False, 0o441), (False, 0o450),
+                                (True, 0o500), (True, 0o570), (True, 0o551)):
+            with self.subTest(mode=mode), self.assertRaises(gateway.Denied):
+                self.validate((stat.S_IFDIR if directory else stat.S_IFREG) | mode,
+                              credential_acl(directory), directory=directory)
+        for special in (stat.S_ISUID, stat.S_ISGID, stat.S_ISVTX):
+            for directory, mode, acl in ((False, 0o440, credential_acl()),
+                                         (True, 0o550, credential_acl(True)),
+                                         (False, 0o400, OSError(errno.ENODATA, 'synthetic')),
+                                         (True, 0o700, OSError(errno.ENODATA, 'synthetic'))):
+                with self.subTest(special=special, mode=mode), self.assertRaises(gateway.Denied):
+                    self.validate((stat.S_IFDIR if directory else stat.S_IFREG) | mode | special,
+                                  acl, directory=directory)
+
+    def test_acl_rejects_extra_principals_rights_ids_masks_and_malformed_data(self):
+        for directory in (False, True):
+            entries = list(struct.iter_unpack('<HHI', credential_acl(directory)[4:]))
+            bad_entries = [entries + [(2, 0, SERVICE_UID + 1)],
+                           entries + [(8, 0, 1000)], entries + [entries[1]],
+                           entries[:-1], list(reversed(entries))]
+            for index, replacements in ((0, [(1, 7, UNDEFINED_ID), (1, 4, 0)]),
+                                        (1, [(2, 7, SERVICE_UID), (2, 8, SERVICE_UID), (2, 4, 0),
+                                             (2, 4, SERVICE_UID + 1), (8, 4, SERVICE_UID)]),
+                                        (2, [(4, 4, UNDEFINED_ID), (4, 0, 1000)]),
+                                        (3, [(16, 7, UNDEFINED_ID), (16, 0, UNDEFINED_ID),
+                                             (16, 4, 1000), (64, 4, UNDEFINED_ID)]),
+                                        (4, [(32, 4, UNDEFINED_ID), (32, 0, 1000)])):
+                for replacement in replacements:
+                    changed = entries.copy()
+                    changed[index] = replacement
+                    bad_entries.append(changed)
+            bad_acls = [credential_acl(entries=bad) for bad in bad_entries]
+            good = credential_acl(directory)
+            bad_acls += [b'', good[:3], good[:-1], good + b'x',
+                         credential_acl(directory, version=1), good.decode('latin1')]
+            for acl in bad_acls:
+                with self.subTest(directory=directory, acl=acl), self.assertRaises(gateway.Denied):
+                    self.validate((stat.S_IFDIR | 0o550) if directory else (stat.S_IFREG | 0o440),
+                                  acl, directory=directory)
+
+
+class CredentialReads(unittest.TestCase):
+    def synthetic_runtime(self, acl_layout=False, invalid_fd=None, oversize=False, grow=False,
+                          bad_acl=None):
+        policy = json.dumps({'version': 1, 'applications': [APP]}).encode()
+        connection = b'{"version":1}'
+        token = jwt().encode()
+        contents = {31: policy, 32: connection, 33: token}
+        offsets, reads, closes, opens = {}, [], [], []
+
+        def open_file(path, flags, **kwargs):
+            opens.append((path, flags, kwargs))
+            if path == gateway.CREDENTIAL_DIR:
+                return 30
+            return {'observer-policy': 31, 'observer-connection': 32, 'observer-token': 33}[path]
+
+        def fstat(fd):
+            mode = (0o550 if acl_layout else 0o500) if fd == 30 else (0o440 if acl_layout else 0o400)
+            if fd == invalid_fd:
+                mode |= 0o002
+            return SimpleNamespace(st_uid=0, st_mode=(stat.S_IFDIR if fd == 30 else stat.S_IFREG) | mode,
+                                   st_size=gateway.BODY_LIMIT + 1 if oversize else len(contents.get(fd, b'')))
+
+        def getxattr(fd, key):
+            self.assertEqual(key, 'system.posix_acl_access')
+            if fd == 31 and bad_acl is not None:
+                if isinstance(bad_acl, Exception):
+                    raise bad_acl
+                return bad_acl
+            if acl_layout:
+                return credential_acl(fd == 30)
+            raise OSError(errno.ENODATA, 'synthetic')
+
+        def read(fd, count):
+            reads.append((fd, count))
+            offset = offsets.get(fd, 0)
+            value = b'x' * (gateway.BODY_LIMIT + 1) if grow and fd == 31 else contents[fd]
+            chunk = value[offset:offset + min(count, 19)]
+            offsets[fd] = offset + len(chunk)
+            return chunk
+
+        with patch.dict(os.environ, {'CREDENTIALS_DIRECTORY': gateway.CREDENTIAL_DIR}), \
+                patch.object(gateway.os, 'geteuid', return_value=SERVICE_UID), \
+                patch.object(gateway.os, 'open', side_effect=open_file), \
+                patch.object(gateway.os, 'fstat', side_effect=fstat), \
+                patch.object(gateway.os, 'getxattr', side_effect=getxattr), \
+                patch.object(gateway.os, 'read', side_effect=read), \
+                patch.object(gateway.os, 'close', side_effect=closes.append), \
+                patch.object(gateway, 'connection', return_value=('synthetic', 443, None)):
+            if invalid_fd or oversize or grow or bad_acl is not None:
+                with self.assertRaises(gateway.Denied):
+                    gateway.runtime()
+            else:
+                configured, transport, result_token = gateway.runtime()
+                self.assertEqual(configured, {APP['id']: APP})
+                self.assertEqual(transport, ('synthetic', 443, None))
+                self.assertEqual(result_token.encode(), token)
+        return opens, reads, closes
+
+    def test_both_layouts_read_validated_descriptors_with_fixed_names_and_flags(self):
+        for layout in (False, True):
+            with self.subTest(acl=layout):
+                opens, reads, closes = self.synthetic_runtime(layout)
+                self.assertEqual(opens[0], (gateway.CREDENTIAL_DIR,
+                    os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC, {}))
+                self.assertEqual(opens[1:], [(filename,
+                    os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK, {'dir_fd': 30})
+                    for filename in ('observer-policy', 'observer-connection', 'observer-token')])
+                self.assertEqual({fd for fd, _ in reads}, {31, 32, 33})
+                self.assertEqual(closes, [31, 32, 33, 30])
+
+    def test_bad_directory_or_file_and_oversize_fail_before_credential_reads(self):
+        for layout in (False, True):
+            for invalid_fd in (30, 31):
+                with self.subTest(acl=layout, fd=invalid_fd):
+                    _, reads, closes = self.synthetic_runtime(layout, invalid_fd)
+                    self.assertEqual(reads, [])
+                    self.assertEqual(closes, [30] if invalid_fd == 30 else [31, 30])
+        _, reads, closes = self.synthetic_runtime(oversize=True)
+        self.assertEqual(reads, [])
+        self.assertEqual(closes, [31, 30])
+
+    def test_invalid_or_inaccessible_acl_is_denied_before_reading(self):
+        for acl in (b'', credential_acl()[:-1], OSError(errno.EACCES, 'synthetic'),
+                    OSError(errno.EPERM, 'synthetic'), OSError(errno.EIO, 'synthetic')):
+            with self.subTest(acl=acl):
+                _, reads, closes = self.synthetic_runtime(bad_acl=acl)
+                self.assertEqual(reads, [])
+                self.assertEqual(closes, [31, 30])
+
+    def test_growth_after_stat_still_has_bounded_reads(self):
+        _, reads, closes = self.synthetic_runtime(grow=True)
+        self.assertEqual(sum(min(count, 19) for _, count in reads), gateway.BODY_LIMIT + 1)
+        self.assertTrue(all(fd == 31 and 0 < count <= gateway.BODY_LIMIT + 1 for fd, count in reads))
+        self.assertEqual(closes, [31, 30])
+
+    def test_real_synthetic_file_replacement_reads_the_opened_inode(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)
+            policy_path = path / 'observer-policy'
+            policy_path.write_text(json.dumps({'version': 1, 'applications': [APP]}))
+            (path / 'observer-connection').write_text('{"version":1}')
+            (path / 'observer-token').write_text(jwt())
+            for filename in path.iterdir():
+                filename.chmod(0o400)
+            real_fstat = os.fstat
+            replaced = False
+
+            def metadata(fd):
+                info = real_fstat(fd)
+                return SimpleNamespace(st_uid=0, st_mode=info.st_mode, st_size=info.st_size)
+
+            def getxattr(fd, key):
+                nonlocal replaced
+                if stat.S_ISREG(real_fstat(fd).st_mode) and not replaced:
+                    replacement = path / 'replacement'
+                    replacement.write_text('invalid replacement must never be read')
+                    replacement.chmod(0o400)
+                    os.replace(replacement, policy_path)
+                    replaced = True
+                raise OSError(errno.ENODATA, 'synthetic')
+
+            # Fake only directory mode/owner; the actual file descriptors and
+            # inode replacement remain real synthetic filesystem operations.
+            def directory_metadata(fd):
+                info = metadata(fd)
+                if stat.S_ISDIR(info.st_mode):
+                    info.st_mode = stat.S_IFDIR | 0o500
+                return info
+
+            with patch.object(gateway, 'CREDENTIAL_DIR', directory), \
+                    patch.dict(os.environ, {'CREDENTIALS_DIRECTORY': directory}), \
+                    patch.object(gateway.os, 'geteuid', return_value=SERVICE_UID), \
+                    patch.object(gateway.os, 'fstat', side_effect=directory_metadata), \
+                    patch.object(gateway.os, 'getxattr', side_effect=getxattr), \
+                    patch.object(gateway, 'connection', return_value=('synthetic', 443, None)):
+                self.assertEqual(gateway.runtime()[0], {APP['id']: APP})
+            self.assertTrue(replaced)
+
+    def test_symlink_directory_file_and_nonblocking_fifo_are_denied_without_reads(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)
+            linked = path / 'linked'
+            linked.symlink_to(path, target_is_directory=True)
+            real_open = os.open
+            real_validator = gateway.credential_metadata
+
+            def safe_open(filename, flags, **kwargs):
+                if filename == 'observer-policy':
+                    self.assertTrue(flags & os.O_NONBLOCK)
+                return real_open(filename, flags, **kwargs)
+
+            for target in (linked, path):
+                for object_type in ('symlink', 'fifo'):
+                    credential = path / 'observer-policy'
+                    if object_type == 'symlink':
+                        credential.symlink_to(path / 'missing')
+                    else:
+                        os.mkfifo(credential, 0o400)
+                    try:
+                        with patch.object(gateway, 'CREDENTIAL_DIR', str(target)), \
+                                patch.dict(os.environ, {'CREDENTIALS_DIRECTORY': str(target)}), \
+                                patch.object(gateway.os, 'geteuid', return_value=SERVICE_UID), \
+                                patch.object(gateway.os, 'open', side_effect=safe_open), \
+                                patch.object(gateway.os, 'read') as read, \
+                                patch.object(gateway, 'credential_metadata', wraps=gateway.credential_metadata) as validate:
+                            # Permit the temporary directory's synthetic owner/mode
+                            # while retaining the real validator for the FIFO.
+                            validate.side_effect = lambda fd, service_uid, directory=False: (
+                                os.fstat(fd) if directory else real_validator(fd, service_uid))
+                            with self.assertRaises((gateway.Denied, OSError)):
+                                gateway.runtime()
+                            read.assert_not_called()
+                    finally:
+                        credential.unlink()
+
+    def test_production_root_and_factory_uid_remain_denied(self):
+        for service_uid in (0, 1000):
+            with self.subTest(uid=service_uid), \
+                    patch.object(gateway, 'installed_source'), patch.object(gateway, 'disable_dumping'), \
+                    patch.object(gateway.pwd, 'getpwnam', return_value=SimpleNamespace(pw_uid=1000)), \
+                    patch.object(gateway.os, 'geteuid', return_value=service_uid), \
+                    patch.object(gateway, 'runtime') as runtime, self.assertRaises(gateway.Denied):
+                gateway.main()
+            runtime.assert_not_called()
 
 
 class ProtocolAndPolicy(unittest.TestCase):

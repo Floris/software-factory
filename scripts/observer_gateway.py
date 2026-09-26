@@ -2,6 +2,7 @@
 import base64
 import ctypes
 from datetime import datetime, timezone
+import errno
 import http.client
 import json
 import os
@@ -138,6 +139,41 @@ def check_metadata(info, kind, owner, mode=None):
         require(stat.S_IMODE(info.st_mode) == mode)
 
 
+def credential_metadata(fd, service_uid, directory=False):
+    """Validate an opened credential inode, without reading credential bytes.
+
+    Operator verifiers must pass the verified service UID, even when run as
+    root. The Linux ACL's group mode bits describe its mask, not group access.
+    """
+    require(type(service_uid) is int and 0 < service_uid < 0xffffffff)
+    try:
+        info = os.fstat(fd)
+    except OSError:
+        raise Denied() from None
+    kind = stat.S_ISDIR if directory else stat.S_ISREG
+    require(kind(info.st_mode) and info.st_uid in (0, service_uid))
+    mode = stat.S_IMODE(info.st_mode)
+    try:
+        acl = os.getxattr(fd, 'system.posix_acl_access')
+    except OSError as failure:
+        # Only an absent/unsupported ACL permits the strictly private fallback.
+        require(failure.errno in (errno.ENODATA, errno.ENOTSUP, errno.EOPNOTSUPP))
+        require(mode in ((0o500, 0o700) if directory else (0o400,)))
+    else:
+        require(info.st_uid == 0 and mode == (0o550 if directory else 0o440))
+        # Linux posix_acl_xattr: little-endian version 2, five canonical entries
+        # (tag, permissions, ID). Unqualified tags must use ACL_UNDEFINED_ID.
+        require(isinstance(acl, bytes) and len(acl) == 44
+                and struct.unpack_from('<I', acl)[0] == 2)
+        access, undefined = (5 if directory else 4), 0xffffffff
+        require(tuple(struct.iter_unpack('<HHI', acl[4:])) == (
+            (0x01, access, undefined), (0x02, access, service_uid),
+            (0x04, 0, undefined), (0x10, access, undefined),
+            (0x20, 0, undefined),
+        ))
+    return info
+
+
 def installed_source():
     require(Path(__file__) == INSTALLED)
     for path in (*reversed(INSTALLED.parents), INSTALLED):
@@ -176,26 +212,36 @@ def validate_token(token):
 
 def runtime():
     require(os.environ.get('CREDENTIALS_DIRECTORY') == CREDENTIAL_DIR)
-    directory = Path(CREDENTIAL_DIR)
-    info = directory.lstat()
-    require(info.st_uid in (0, os.geteuid()) and stat.S_ISDIR(info.st_mode) and not info.st_mode & 0o077)
+    service_uid = os.geteuid()
+    directory_fd = os.open(CREDENTIAL_DIR, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
 
     def read(filename, limit):
-        path = directory / filename
-        info = path.lstat()
-        require(info.st_uid in (0, os.geteuid()) and stat.S_ISREG(info.st_mode)
-                and stat.S_IMODE(info.st_mode) == 0o400 and info.st_size <= limit)
-        with path.open('rb') as stream:
-            value = stream.read(limit + 1)
-        require(len(value) <= limit)
-        return value
+        fd = os.open(filename, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK,
+                     dir_fd=directory_fd)
+        try:
+            info = credential_metadata(fd, service_uid)
+            require(0 <= info.st_size <= limit)
+            chunks, size = [], 0
+            while True:
+                chunk = os.read(fd, limit + 1 - size)
+                if not chunk:
+                    return b''.join(chunks)
+                chunks.append(chunk)
+                size += len(chunk)
+                require(size <= limit)
+        finally:
+            os.close(fd)
 
-    configured = policy(strict_json(read('observer-policy', BODY_LIMIT)))
-    transport = connection(strict_json(read('observer-connection', BODY_LIMIT)))
     try:
-        token = read('observer-token', 16384).decode('ascii').strip()
-    except UnicodeError:
-        raise Denied() from None
+        credential_metadata(directory_fd, service_uid, directory=True)
+        configured = policy(strict_json(read('observer-policy', BODY_LIMIT)))
+        transport = connection(strict_json(read('observer-connection', BODY_LIMIT)))
+        try:
+            token = read('observer-token', 16384).decode('ascii').strip()
+        except UnicodeError:
+            raise Denied() from None
+    finally:
+        os.close(directory_fd)
     require(token and len(token) <= 16384 and all(33 <= ord(c) <= 126 for c in token))
     return configured, transport, validate_token(token)
 
