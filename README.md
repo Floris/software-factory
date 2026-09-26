@@ -119,9 +119,10 @@ Project-scoped role definitions under [`.codex/agents/`](.codex/agents/) pin
 role-appropriate models and reasoning effort: the architect and reviewer use
 the higher-capability analysis model, while the implementation worker uses the
 bounded implementation model. No global agent model is set. Role definitions
-also enforce that delegated agents cannot create or delete branches or
-worktrees, mutate pull requests, or run lifecycle cleanup; those operations
-belong to the Oracle.
+also keep branch/worktree management and lifecycle cleanup with the Oracle.
+The PR reviewer stays read-only on disk; an explicit Oracle-authorized
+`review_and_merge` assignment permits one conditional true merge of the exact
+PR/head through the GitHub connector. Other PR mutations remain with the Oracle.
 
 Repository-scoped skills under [`.agents/skills/`](.agents/skills/) make these
 workflows selectable in `/skills` and available through normal automatic skill

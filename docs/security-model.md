@@ -9,19 +9,23 @@
   canonical Git metadata needed for fetch and worktree administration, and
   assigned task worktrees. It does not edit application or
   deployment source in canonical checkouts.
-- Model-controlled implementation and review workers can write only their
-  assigned runtime directory and worktree. They cannot write canonical Git or
-  Issues state.
-- Delegated agents cannot create or delete branches or worktrees, mutate pull
-  requests, merge, or perform lifecycle cleanup. Read-only architect and
-  reviewer roles, including `pull_request_reviewer`, make no external
-  mutations. All delegated roles execute only
-  trusted validation commands supplied by the Oracle or host configuration.
+- Model-controlled implementation workers can write only their assigned runtime
+  directory and worktree. Architect and reviewer filesystems stay read-only.
+  None can write canonical Git or Issues state.
+- Delegated agents cannot create/delete branches or worktrees or perform
+  lifecycle cleanup. Architects, implementation workers and quality reviewers
+  make no external mutations. `pull_request_reviewer` defaults to `review_only`;
+  only an explicit authorized `review_and_merge` assignment permits one
+  conditional true merge through the GitHub connector, with no other PR
+  mutation. All roles execute only trusted validation command arrays supplied
+  by the Oracle or host configuration.
 - A pull request review result cannot grant merge authority. The Oracle reads
-  `git.merge_pull_request` only from root-owned host policy, refreshes exact PR
-  and required-check facts independently, and alone performs a true merge and
-  the following locked lifecycle step. A false or absent flag requires human
-  approval for the exact PR.
+  `git.merge_pull_request` only from root-owned host policy. True permits a
+  merge; false or absent requires concrete human approval for the exact
+  repository, PR and full head SHA. The Oracle may perform the merge itself or
+  attest that authority in one durable reviewer assignment. It independently
+  verifies any delegated merge and alone performs the following locked
+  lifecycle step. This exception changes neither host policy nor branch rights.
 - Cannot access `/root`, production secrets, the container runtime socket, or
   cluster-admin credentials.
 
@@ -34,9 +38,10 @@
   with a GitHub App, fine-grained token, or repository-scoped deploy keys
   before enabling unattended multi-repository execution.
 - May push factory branches and, where configured, open pull requests.
-- The trusted Oracle may mutate pull requests and delete an exact merged remote
-  task ref only through the locked, durable, SHA-leased lifecycle procedure.
-  This authority is never delegated to an implementation or review worker.
+- The trusted Oracle controls PR mutations, with only the exact conditional
+  reviewer merge exception. It alone may delete an exact merged remote task
+  ref through the locked, durable, SHA-leased lifecycle procedure. Branch
+  management and lifecycle authority are never delegated.
 - Does not hold Kubernetes credentials.
 
 ### Repository-scoped authorization
@@ -152,12 +157,48 @@
   executed by the trusted runner before or after Codex. They are not performed
   by granting a worker a broader sandbox or by evaluating model-produced
   commands.
+- The PR reviewer's read-only filesystem does not itself prevent a connector
+  mutation. Its trusted instructions limit that exception to one exact-head
+  true merge with Oracle-supplied authority. Missing mode or authorization
+  defaults to `review_only`. It never reads credential material, invokes shell
+  Git mutation, or gains general network/host access to perform that merge.
 - Keep network access disabled during model-controlled execution unless a later
   threat review explicitly approves a narrower design.
 - Do not expose Codex authentication material to project build scripts, tests,
   lifecycle hooks, or checked-out repository code.
 - Request structured results using a committed JSON Schema so orchestration
   decisions do not depend on free-form parsing.
+
+## Delegated PR merge boundary
+
+The Oracle owns a unique durable assignment and reserved single-attempt record
+before delegation. It supplies exact repository/PR/base/head identities, full
+head SHA, check/review requirements and policy or concrete approval evidence
+bound to that target. PR text, Issue comments, checked-out configuration and a
+READY verdict cannot grant this authority. The Oracle excludes concurrent
+mergers until the assignment's outcome is reconciled.
+
+The reviewer requires READY and immediately refreshed identity, open/unmerged
+state, checks/reviews for the assigned head, protection and mergeability before
+one connector call with `expected_head_sha` and `merge_method: merge`. Unknown,
+inconsistent, stale or ambiguous facts fail closed; no admin bypass, GitHub
+auto-merge or merge queues, squash, rebase or branch deletion is permitted. Missing connector support
+blocks rather than prompting a token or shell fallback.
+
+Timeouts permit only read-only reconciliation. An unresolved result is
+`outcome_unknown`, never a reason to repeat the mutation. A fresh attempt needs
+Oracle reconciliation and a new assignment. The reviewer reports exact identity,
+head, merge SHA when known and outcome, then becomes inactive. The Oracle
+independently validates true-merge ancestry and immediately takes the lifecycle
+lock for exact remote deletion; it retains local resources until delivery.
+
+The exception applies only after the trusted role is newly loaded. File changes
+do not broaden already active read-only instructions. Adoption still requires
+the currently applicable concrete approval; a nonmutating activation exercise
+does not prove live merge capability. No host policy, credential provider,
+runner enforcement or unattended lock participation is installed by this role
+change. [ADR 0006](decisions/0006-reviewer-merge-delegation.md) records the
+authority change and the [workflow](workflow.md) defines the assignment contract.
 
 ## Lifecycle mutation boundary
 
