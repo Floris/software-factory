@@ -1,0 +1,3 @@
+interface:
+  display_name: "Go"
+  short_description: "Build idiomatic Go HTTP services"
