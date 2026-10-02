@@ -49,12 +49,13 @@ project's installed version.
 
 ## Sources and limits
 
-The compact entrypoint and focused example references follow the
-[Agent Skills specification](https://agentskills.io/specification). The
-[Vercel React best-practices skill](https://github.com/vercel-labs/agent-skills/blob/main/skills/react-best-practices/SKILL.md)
-is a structural example of selective references; its large rule set is not
-copied or treated as a dependency. All bad/better examples here are original
-and illustrate decisions relevant to this portfolio.
+The topic-based guides put practical decisions and code examples directly
+in each `SKILL.md`, with focused references for additional cases. Their
+packaging follows the [Agent Skills specification](https://agentskills.io/specification).
+The [Vercel React best-practices skill](https://github.com/vercel-labs/agent-skills/blob/main/skills/react-best-practices/SKILL.md)
+is a structural inspiration; its rule catalog is not copied or a dependency.
+The guides use original examples and link their additional primary sources
+within the relevant chapters.
 
 The Next.js skill uses the official guides on
 [data security](https://nextjs.org/docs/app/guides/data-security),
