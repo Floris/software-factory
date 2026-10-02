@@ -1,0 +1,3 @@
+interface:
+  display_name: "Coding Style"
+  short_description: "Write clear, idiomatic, verifiable code"

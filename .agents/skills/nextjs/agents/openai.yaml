@@ -1,0 +1,3 @@
+interface:
+  display_name: "Next.js"
+  short_description: "Build safe Next.js routes and React views"

@@ -1,0 +1,3 @@
+interface:
+  display_name: "Kubernetes GitOps"
+  short_description: "Edit coherent Kubernetes desired state"

@@ -1,0 +1,3 @@
+interface:
+  display_name: "Postgres and Prisma"
+  short_description: "Evolve SQL schemas and Prisma queries safely"

@@ -133,6 +133,11 @@ selection:
 - [`factory-task`](.agents/skills/factory-task/SKILL.md) implements or resumes
   one scoped central Issue with the configured agent roles and delivery gates.
 
+The [coding skills catalog](docs/coding-skills.md) maps the registered project
+stacks to eight optional language, framework, database and UI skills. `factory-task`
+passes relevant skill paths to writers and reviewers working in product
+worktrees.
+
 For example, enter `$factory-project Ik wil aan een nieuw project werken` or
 `$factory-task Voer issue #123 uit` in Codex. Keep the Oracle session at the
 factory entrypoint so these skills and the project-scoped agent roles are
@@ -165,6 +170,7 @@ codex
 - [Restricted observer gateway and operator installation](docs/observer-gateway.md)
 - [Observer credential isolation decision](docs/decisions/0005-observer-gateway.md)
 - [GitHub Issues model](docs/issues-model.md)
+- [Coding skills and project inventory](docs/coding-skills.md)
 - [Task-store cutover](docs/github-issues-cutover.md)
 - [Roadmap](ROADMAP.md)
 - [Why this is a separate repository](docs/decisions/0001-separate-control-repository.md)
